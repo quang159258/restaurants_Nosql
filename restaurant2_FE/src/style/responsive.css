@@ -1,0 +1,179 @@
+@media (max-width : 1280px) {
+    .slide__title {
+        font-size: 30px;
+        text-align: center;
+        width: 100%;
+    }
+
+
+}
+
+@media (max-width : 960px) {
+    .slide__title {
+        font-size: 30px;
+        text-align: center;
+        width: 100%;
+    }
+
+    .menu {
+        top: 69.8%;
+    }
+
+    .menu__name,
+    .menu__ingredient {
+        color: black;
+    }
+
+    .about {
+        margin-top: 600px;
+    }
+
+    .parameter .parameter__item {
+        text-align: center;
+    }
+
+
+    .dish__img {
+        height: 265px;
+    }
+
+    .dish__item--reverse {
+        display: flex;
+        flex-direction: column-reverse;
+    }
+
+
+    .container {
+        max-width: 720px !important;
+    }
+
+    .about.index {
+        padding-top: 260px;
+    }
+
+    nav {
+        margin: 0;
+        background-color: black;
+        margin-top: 0px !important;
+        height: 50px;
+        overflow: hidden;
+        transition: 0.5s;
+        padding: 0 !important;
+    }
+
+    .nav__page {
+        display: none;
+    }
+
+    .nav__bar {
+        display: block;
+        float: right;
+        height: 50px;
+        padding: 10px 0;
+    }
+
+    .nav__bar p {
+        display: inline-block;
+        margin: 0;
+    }
+
+    .nav__menu {
+        display: block;
+
+    }
+
+    .nav__listItem {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+    }
+
+
+
+    .nav__item {
+        list-style-type: none;
+        padding: 10px 0px;
+    }
+
+    .nav__item a {
+        color: var(--white-color);
+        font-size: 14px;
+        text-decoration: none;
+    }
+
+    .nav__item--active a {
+        color: var(--primary-color) !important;
+        transition: 0.3s;
+        /* Thêm transition cho màu chữ */
+        line-height: 32px;
+    }
+
+    .nav__item--active a:hover {
+        color: var(--white-color);
+    }
+
+    .nav__listItem .button {
+        padding-left: 10px;
+    }
+
+    .nav__brand {
+        padding: 10px 0;
+        line-height: 50px;
+    }
+
+    .nav__item a {
+        color: var(--white-color);
+    }
+
+    .shopping__cart__icon .shopping__cart__quantity {
+        left: 18px;
+        top: 0px;
+    }
+}
+
+
+@media (width <=768px) {
+    .about.index {
+        margin-top: 90vh;
+    }
+
+    .container {
+        max-width: 520px !important;
+    }
+
+
+
+    .button__change {
+        background-color: #f6f1e9;
+        margin-bottom: 4px;
+        position: relative;
+    }
+
+    .button__change.active::before {
+        position: absolute;
+        content: '';
+        border: none;
+    }
+
+    .modal {
+        height: 100vh;
+    }
+
+    .modal>.row {
+        height: 100vh !important;
+    }
+
+    .modal__container {
+        margin: 0 !important;
+    }
+
+    .modal__img {
+        padding: 0 !important;
+        height: 30vh !important;
+    }
+
+    .menu {
+        margin-top: 100px;
+    }
+
+}
