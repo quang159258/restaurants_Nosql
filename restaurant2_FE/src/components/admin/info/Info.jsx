@@ -1,11 +1,12 @@
-import { Avatar, Button, Input, message, Select, Upload } from 'antd';
-import { LockOutlined, MailOutlined, UserOutlined, PhoneOutlined, HomeOutlined } from '@ant-design/icons';
+import { Avatar, Button, Input, message, Select, Upload, Divider } from 'antd';
+import { LockOutlined, MailOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import bg1 from '../../../assets/img/bg_1.jpg.webp'; // vẫn giữ hình nền
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../context/auth.context';
-import { updateUserApi } from '../../../services/api.service';
+import { updateUserApi, changePassword } from '../../../services/api.service';
 import Notification from '../../noti/Notification';
+import AddressSelector from '../../common/AddressSelector';
 
 const { Option } = Select;
 
@@ -14,13 +15,17 @@ export const InfoPageAdmin = () => {
     const [userName, setUserName] = useState();
     const [phone, setPhone] = useState();
     const [gender, setGender] = useState();
-    const [address, setAddress] = useState();
+    const [address, setAddress] = useState("");
     const [email, setEmail] = useState();
     const [role, setRole] = useState();
     const [avatarUrl, setAvatarUrl] = useState(
         'https://api.dicebear.com/7.x/thumbs/svg?seed=defaultUser'
     );
     const [notifications, setNotifications] = useState([]);
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [passwordLoading, setPasswordLoading] = useState(false);
     const addNotification = (message, description, type) => {
         const id = Date.now();
         const newNotif = { id, message, description, type };
@@ -35,7 +40,7 @@ export const InfoPageAdmin = () => {
         setUserName(user.username);
         setPhone(user.phone);
         setGender(user.gender);
-        setAddress(user.address);
+        setAddress(user.address || "");
         setEmail(user.email);
         setRole(user.role);
     }
@@ -71,11 +76,39 @@ export const InfoPageAdmin = () => {
 
         }
     }
+
+    const handleChangePassword = async () => {
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            addNotification("Thiếu thông tin", "Vui lòng nhập đầy đủ các trường mật khẩu", "warning");
+            return;
+        }
+        if (newPassword.length < 6) {
+            addNotification("Mật khẩu yếu", "Mật khẩu mới phải có ít nhất 6 ký tự", "warning");
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            addNotification("Không khớp", "Xác nhận mật khẩu không trùng khớp", "warning");
+            return;
+        }
+        try {
+            setPasswordLoading(true);
+            await changePassword({ currentPassword, newPassword });
+            addNotification("Thành công", "Đã đổi mật khẩu", "success");
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+        } catch (error) {
+            const errorMsg = error?.response?.data?.message || "Không thể đổi mật khẩu";
+            addNotification("Lỗi", errorMsg, "error");
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
     return (
-        <div className="relative w-full h-screen overflow-hidden">
+        <div className="relative w-full min-h-screen overflow-x-hidden pb-16">
             {/* Background ảnh */}
             <div
-                className="absolute top-0 left-0 w-full h-full bg-cover bg-center"
+                className="absolute inset-0 w-full h-full bg-cover bg-center"
                 style={{
                     backgroundImage: `url(${bg1})`,
                     filter: 'brightness(0.3)',
@@ -84,8 +117,8 @@ export const InfoPageAdmin = () => {
             />
 
             {/* Form nằm phía trên background */}
-            <div className="relative z-10 flex  justify-center w-full  ">
-                <div className="w-full max-w-2xl bg-white px-10 py-8 rounded-2xl shadow-lg p-4">
+            <div className="relative z-10 flex justify-center w-full py-16">
+                <div className="w-full max-w-2xl bg-white px-10 py-8 rounded-2xl shadow-lg">
                     <h1 className="text-xl font-bold text-gray-800 text-center mb-6">Thông tin người dùng</h1>
 
                     {/* Avatar */}
@@ -178,15 +211,9 @@ export const InfoPageAdmin = () => {
                         </div>
 
                         {/* Address */}
-                        <div className="mb-4 w-100">
+                        <div className="mb-4 w-full">
                             <label className="block mb-1 font-medium text-gray-800">Địa chỉ</label>
-                            <Input
-                                size="large"
-                                prefix={<HomeOutlined className="text-gray-400" />}
-                                placeholder="Nhập địa chỉ"
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value)}
-                            />
+                            <AddressSelector value={address} onChange={setAddress} />
                         </div>
                     </div>
 
@@ -200,6 +227,40 @@ export const InfoPageAdmin = () => {
                     >
                         Update
                     </Button>
+
+                    <Divider />
+
+                    <div className="space-y-4">
+                        <h2 className="text-lg font-semibold text-gray-800">Đổi mật khẩu</h2>
+                        <Input.Password
+                            placeholder="Mật khẩu hiện tại"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            size="large"
+                        />
+                        <Input.Password
+                            placeholder="Mật khẩu mới"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            size="large"
+                        />
+                        <Input.Password
+                            placeholder="Xác nhận mật khẩu mới"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            size="large"
+                        />
+                        <Button
+                            type="primary"
+                            danger
+                            ghost
+                            block
+                            loading={passwordLoading}
+                            onClick={handleChangePassword}
+                        >
+                            Đổi mật khẩu
+                        </Button>
+                    </div>
                 </div>
             </div>
             {/* Hiển thị thông báo */}

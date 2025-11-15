@@ -15,5 +15,4 @@ public class CheckoutRequest {
     private String receiverAddress;
     private String receiverEmail;
     private String paymentMethod;
-    private String paymentUrl; // nếu là VNPay thì set, còn COD thì null
 }

@@ -1,74 +1,107 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
-import { Stomp } from '@stomp/stompjs';
 
 class WebSocketService {
     constructor() {
         this.stompClient = null;
         this.connected = false;
-        this.subscriptions = new Map();
+        this.topicRegistry = new Map(); // topic -> { callbacks: Set<fn>, subscription }
+        this._connecting = false;
     }
 
     connect() {
-        if (this.connected) return;
-
+        if (this.connected || this._connecting) return;
+        this._connecting = true;
         const socket = new SockJS('http://localhost:8081/ws');
         this.stompClient = new Client({
             webSocketFactory: () => socket,
-            debug: (str) => console.log(str),
             reconnectDelay: 5000,
             heartbeatIncoming: 4000,
             heartbeatOutgoing: 4000,
         });
-        
-        this.stompClient.onConnect = (frame) => {
-            console.log('WebSocket Connected: ' + frame);
+
+        this.stompClient.onConnect = () => {
             this.connected = true;
-            this.onConnect();
+            this._connecting = false;
+            this.topicRegistry.forEach((_, topic) => this.ensureSubscription(topic));
         };
-        
+
         this.stompClient.onStompError = (error) => {
-            console.error('WebSocket Connection Error: ' + error);
+            console.error('WebSocket error', error);
             this.connected = false;
-            this.onDisconnect();
+            this.resetSubscriptions();
         };
-        
+
+        this.stompClient.onWebSocketClose = () => {
+            this.connected = false;
+            this.resetSubscriptions();
+        };
+
         this.stompClient.activate();
     }
 
-    disconnect() {
-        if (this.stompClient && this.connected) {
-            this.stompClient.deactivate();
-            this.connected = false;
-            this.subscriptions.clear();
-        }
+    resetSubscriptions() {
+        this.topicRegistry.forEach((entry) => {
+            if (entry.subscription) {
+                entry.subscription.unsubscribe();
+                entry.subscription = null;
+            }
+        });
     }
 
     subscribe(topic, callback) {
-        if (!this.connected || !this.stompClient) {
-            console.warn('WebSocket not connected');
-            return null;
+        if (!topic || typeof callback !== 'function') {
+            return () => {};
         }
-
-        const subscription = this.stompClient.subscribe(topic, (message) => {
-            try {
-                const data = JSON.parse(message.body);
-                callback(data);
-            } catch (error) {
-                console.error('Error parsing WebSocket message:', error);
-            }
-        });
-
-        this.subscriptions.set(topic, subscription);
-        return subscription;
+        if (!this.topicRegistry.has(topic)) {
+            this.topicRegistry.set(topic, { callbacks: new Set(), subscription: null });
+        }
+        const entry = this.topicRegistry.get(topic);
+        entry.callbacks.add(callback);
+        if (this.connected) {
+            this.ensureSubscription(topic);
+        } else {
+            this.connect();
+        }
+        return () => this.unsubscribe(topic, callback);
     }
 
-    unsubscribe(topic) {
-        const subscription = this.subscriptions.get(topic);
-        if (subscription) {
-            subscription.unsubscribe();
-            this.subscriptions.delete(topic);
+    ensureSubscription(topic) {
+        const entry = this.topicRegistry.get(topic);
+        if (!entry || !this.stompClient || entry.subscription) {
+            return;
+        }
+        entry.subscription = this.stompClient.subscribe(topic, (message) => {
+            let payload = null;
+            try {
+                payload = JSON.parse(message.body);
+            } catch (error) {
+                payload = message.body;
+            }
+            entry.callbacks.forEach((cb) => {
+                try {
+                    cb(payload);
+                } catch (err) {
+                    console.error('WebSocket callback error', err);
+                }
+            });
+        });
+    }
+
+    unsubscribe(topic, callback) {
+        const entry = this.topicRegistry.get(topic);
+        if (!entry) return;
+        if (callback) {
+            entry.callbacks.delete(callback);
+        } else {
+            entry.callbacks.clear();
+        }
+        if (entry.callbacks.size === 0) {
+            if (entry.subscription) {
+                entry.subscription.unsubscribe();
+            }
+            this.topicRegistry.delete(topic);
         }
     }
 
@@ -77,56 +110,65 @@ class WebSocketService {
             this.stompClient.send(destination, {}, JSON.stringify(message));
         }
     }
-
-    onConnect() {
-        // Override in component
-    }
-
-    onDisconnect() {
-        // Override in component
-    }
-
-    // Subscribe to admin-only notifications
-    subscribeAdminNotifications(callback) {
-        return this.subscribe('/topic/admin/notifications', callback);
-    }
 }
 
-// Hook để sử dụng WebSocket trong React components
-export const useWebSocket = (userRole = null) => {
-    const [wsService] = useState(() => new WebSocketService());
-    const [notifications, setNotifications] = useState([]);
+const singletonService = new WebSocketService();
 
-    useEffect(() => {
-        wsService.connect();
-        
-        // Subscribe to general notifications (for all users)
-        wsService.subscribe('/topic/notifications', (notification) => {
-            setNotifications(prev => [...prev, {
+export const useWebSocket = (userRole = null, userId = null) => {
+    const [notifications, setNotifications] = useState([]);
+    const subscriptionsRef = useRef([]);
+
+    const appendNotification = (notification) => {
+        setNotifications((prev) => [
+            ...prev,
+            {
                 id: Date.now() + Math.random(),
                 ...notification,
-                timestamp: new Date().toLocaleTimeString()
-            }]);
-        });
+                timestamp: new Date().toLocaleTimeString(),
+            },
+        ]);
+    };
 
-        // Subscribe to admin-only notifications (only for admin users)
-        if (userRole === 'admin' || userRole === 'ADMIN') {
-            wsService.subscribeAdminNotifications((notification) => {
-                setNotifications(prev => [...prev, {
-                    id: Date.now() + Math.random(),
-                    ...notification,
-                    timestamp: new Date().toLocaleTimeString()
-                }]);
-            });
+    useEffect(() => {
+        singletonService.connect();
+        const unsubscribeGeneral = singletonService.subscribe('/topic/notifications', (notification) => {
+            appendNotification(notification);
+        });
+        subscriptionsRef.current.push(unsubscribeGeneral);
+
+        if (userRole === 'SUPER_ADMIN') {
+            subscriptionsRef.current.push(
+                singletonService.subscribe('/topic/admin/notifications', (notification) => {
+                    appendNotification(notification);
+                })
+            );
+        }
+
+        if (userRole === 'STAFF' || userRole === 'SUPER_ADMIN') {
+            subscriptionsRef.current.push(
+                singletonService.subscribe('/topic/staff/notifications', (notification) => {
+                    appendNotification(notification);
+                })
+            );
+        }
+
+        if (userId) {
+            subscriptionsRef.current.push(
+                singletonService.subscribe(`/topic/users/${userId}`, (notification) => {
+                    appendNotification(notification);
+                })
+            );
         }
 
         return () => {
-            wsService.disconnect();
+            subscriptionsRef.current.forEach((unsub) => unsub && unsub());
+            subscriptionsRef.current = [];
         };
-    }, [userRole]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userRole, userId]);
 
     const sendChatMessage = (message, user) => {
-        wsService.sendMessage('/app/chat', { message, user });
+        singletonService.sendMessage('/app/chat', { message, user });
     };
 
     const clearNotifications = () => {
@@ -134,13 +176,11 @@ export const useWebSocket = (userRole = null) => {
     };
 
     return {
-        connected: wsService.connected,
+        connected: singletonService.connected,
         notifications,
         sendChatMessage,
         clearNotifications,
-        subscribe: wsService.subscribe.bind(wsService),
-        unsubscribe: wsService.unsubscribe.bind(wsService)
     };
 };
 
-export default WebSocketService;
+export default singletonService;

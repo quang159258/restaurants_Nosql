@@ -1,11 +1,12 @@
-import { useContext, useEffect, useState } from 'react';
-import { Pagination, Modal } from 'antd';
-import { adDishInCart, getCart, getImageUrl } from '../../../services/api.service';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { Pagination, Modal, Button, Tag, Typography } from 'antd';
+import { ShoppingCartOutlined } from '@ant-design/icons';
+import { adDishInCart, getCart, getImageUrlFromFileName } from '../../../services/api.service';
 import Notification from '../../noti/Notification';
 import { AuthContext } from '../../context/auth.context';
+import foodPlaceholder from '../../../assets/img/food-1.webp';
 
-export const ListDish = ({ dishes, total, setPage, page }) => {
-    const [dishesWithImage, setDishesWithImage] = useState([]);
+export const ListDish = ({ dishes = [], total = 0, setPage, page }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedDish, setSelectedDish] = useState(null);
     const [totalPrice, setTotalPrice] = useState(0);
@@ -20,18 +21,6 @@ export const ListDish = ({ dishes, total, setPage, page }) => {
 
     const { setCart } = useContext(AuthContext);
 
-    // Hàm chia mảng dishes thành các nhóm nhỏ 2 phần tử (dùng để render 2 cột)
-    const chunkArray = (arr, size) => {
-        const res = [];
-        for (let i = 0; i < arr.length; i += size) {
-            res.push(arr.slice(i, i + size));
-        }
-        return res;
-    };
-
-
-
-    // Khi chọn món, đặt số lượng = 1 và tổng tiền = giá món
     useEffect(() => {
         if (selectedDish) {
             setQuantity(1);
@@ -71,73 +60,112 @@ export const ListDish = ({ dishes, total, setPage, page }) => {
         }
     };
 
-    const rows = chunkArray(dishes, 2);
-
-    // Component con hiển thị nội dung món ăn
-    const DishContent = ({ dish, onClick }) => (
-        <>
-            <div className="row g-0 cursor-pointer" onClick={onClick}>
-                <div className="col-12">
-                    <h3 className="dish__name">{dish.name}</h3>
+    const dishCards = useMemo(() => dishes.map((dish) => {
+        const imageSrc = getImageUrlFromFileName(dish.imageUrl) || foodPlaceholder;
+        return (
+            <div
+                key={dish.id}
+                className="dish-card"
+                onClick={() => showModal(dish)}
+                style={{
+                    background: '#fff',
+                    borderRadius: 16,
+                    boxShadow: '0 16px 32px -20px rgba(15,23,42,0.18)',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 20px 45px -25px rgba(15,23,42,0.25)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = '0 16px 32px -20px rgba(15,23,42,0.18)';
+                }}
+            >
+                <div
+                    style={{
+                        position: 'relative',
+                        paddingBottom: '62%',
+                        width: '100%',
+                        overflow: 'hidden',
+                    }}
+                >
+                    <img
+                        src={imageSrc}
+                        alt={dish.name}
+                        onError={(e) => { e.currentTarget.src = foodPlaceholder; }}
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                        }}
+                    />
+                    <Tag
+                        color="gold"
+                        style={{
+                            position: 'absolute',
+                            top: 12,
+                            left: 12,
+                            borderRadius: 999,
+                            padding: '4px 12px',
+                            fontWeight: 600,
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        {dish.category?.name || 'Danh mục'}
+                    </Tag>
                 </div>
-                <div className="col">
-                    <span className="dish__price">{dish.price.toLocaleString()}₫</span>
+                <div style={{ padding: '18px 18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <Typography.Title level={4} style={{ margin: 0, color: '#1f2937' }}>
+                        {dish.name}
+                    </Typography.Title>
+                    <Typography.Paragraph
+                        ellipsis={{ rows: 2 }}
+                        style={{ marginBottom: 0, color: '#6b7280', minHeight: 44 }}
+                    >
+                        {dish.description || 'Delicious dish prepared by our chef.'}
+                    </Typography.Paragraph>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography.Title level={4} style={{ margin: 0, color: '#C8A97E' }}>
+                            {dish.price?.toLocaleString('vi-VN')}₫
+                        </Typography.Title>
+                        <Button
+                            type="primary"
+                            shape="round"
+                            icon={<ShoppingCartOutlined />}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                addDishInCard(dish);
+                            }}
+                            style={{ background: '#C8A97E', borderColor: '#C8A97E' }}
+                        >
+                            Thêm vào giỏ
+                        </Button>
+                    </div>
                 </div>
             </div>
-            <p className="dish__prameter text">{dish.category.name}</p>
-            <button className="order" style={{ marginRight: '10px' }}>
-                Order now
-            </button>
-            <button className="add__card" onClick={() => addDishInCard(dish)}>
-                Add to cart
-            </button>
-        </>
-    );
+        );
+    }), [dishes]);
 
     return (
         <section className="container mb-5">
-            {rows.map((rowDishes, rowIndex) => (
-                <div className="row g-0 menu__item active" key={rowIndex}>
-                    {rowDishes.map((dish) => {
-                        const isEvenRow = rowIndex % 2 === 0;
-                        return (
-                            <div className="col-md-6 food__item" key={dish.id}>
-                                <div className={`row g-0 dish__item ${!isEvenRow ? 'dish__item--reverse' : ''}`}>
-                                    {isEvenRow ? (
-                                        <>
-                                            <div className="col-md-12 col-lg-6">
-                                                <div
-                                                    className="dish__img"
-                                                    style={{
-                                                        backgroundImage: `url(http://localhost:9000/restaurant/${dish.imageUrl || ''})`,
-                                                    }}
-                                                ></div>
-                                            </div>
-                                            <div className="col-md-12 col-lg-6 dish__desc">
-                                                <DishContent dish={dish} onClick={() => showModal(dish)} />
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="col-md-12 col-lg-6 dish__desc">
-                                                <DishContent dish={dish} onClick={() => showModal(dish)} />
-                                            </div>
-                                            <div className="col-md-12 col-lg-6">
-                                                <div
-                                                    className="dish__img"
-                                                    style={{
-                                                        backgroundImage: `url(http://localhost:9000/restaurant/${dish.imageUrl || ''})`,
-                                                    }}
-                                                ></div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            ))}
+            <div
+                className="dish-grid"
+                style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                    gap: '32px',
+                }}
+            >
+                {dishCards}
+            </div>
 
             <Pagination
                 className="mt-5"
@@ -163,12 +191,11 @@ export const ListDish = ({ dishes, total, setPage, page }) => {
                         <div
                             className="modal__img"
                             style={{
-                                backgroundImage: `url(${selectedDish?.imageUrl || ''})`,
                                 width: '100%',
                                 height: '100%',
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
-                                padding: '0 0',
+                                backgroundImage: `url(${getImageUrlFromFileName(selectedDish?.imageUrl) || foodPlaceholder})`,
                             }}
                         ></div>
                     </div>

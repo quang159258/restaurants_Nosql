@@ -1,29 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Table, 
-    Button, 
-    Modal, 
-    Form, 
-    Input, 
-    InputNumber, 
-    message, 
-    Space, 
+import {
+    Table,
+    Button,
+    Modal,
+    Form,
+    Input,
+    InputNumber,
+    message,
+    Space,
     Card,
     Typography,
     Tag,
     Tooltip
 } from 'antd';
-import { 
-    ImportOutlined, 
-    SearchOutlined,
+import {
+    ImportOutlined,
     EyeOutlined,
     ReloadOutlined
 } from '@ant-design/icons';
-import { 
-    fetchAllDish, 
+import {
+    fetchAllDish,
     importStock,
-    fetchAllDishByName
+    fetchAllDishByName,
+    getImageUrlFromFileName
 } from '../../../services/api.service';
+import foodPlaceholder from '../../../assets/img/food-1.webp';
 
 const { Title } = Typography;
 
@@ -42,10 +43,11 @@ const StaffImportStock = () => {
             key: 'imageUrl',
             width: 80,
             render: (imageUrl) => (
-                <img 
-                    src={imageUrl} 
-                    alt="Dish" 
+                <img
+                    src={getImageUrlFromFileName(imageUrl) || foodPlaceholder}
+                    alt="Dish"
                     style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4 }}
+                    onError={(e) => { e.currentTarget.src = foodPlaceholder; }}
                 />
             ),
         },
@@ -124,6 +126,8 @@ const StaffImportStock = () => {
         },
     ];
 
+    const importQuantity = Form.useWatch('importQuantity', form) || 0;
+
     useEffect(() => {
         fetchDishes();
     }, []);
@@ -132,8 +136,11 @@ const StaffImportStock = () => {
         setLoading(true);
         try {
             const res = await fetchAllDish(1, 100, 1);
-            if (res.data && res.data.result) {
-                setDishes(res.data.result);
+            const data = res?.data ?? res;
+            if (data?.result) {
+                setDishes(data.result);
+            } else if (Array.isArray(data)) {
+                setDishes(data);
             }
         } catch (error) {
             message.error('Lỗi khi tải danh sách món ăn');
@@ -181,8 +188,11 @@ const StaffImportStock = () => {
         setLoading(true);
         try {
             const res = await fetchAllDishByName(1, 100, value);
-            if (res.data && res.data.result) {
-                setDishes(res.data.result);
+            const data = res?.data ?? res;
+            if (data?.result) {
+                setDishes(data.result);
+            } else if (Array.isArray(data)) {
+                setDishes(data);
             }
         } catch (error) {
             message.error('Lỗi khi tìm kiếm');
@@ -295,7 +305,7 @@ const StaffImportStock = () => {
                             <p className="text-sm text-blue-600 m-0">
                                 <strong>Lưu ý:</strong> Sau khi nhập kho, tồn kho mới sẽ là: 
                                 <span className="font-bold">
-                                    {(selectedDish?.stock || 0) + (form.getFieldValue('importQuantity') || 0)}
+                                    {(selectedDish?.stock || 0) + (importQuantity || 0)}
                                 </span>
                             </p>
                         </div>

@@ -33,11 +33,17 @@ public class UserService {
     }
 
     public User CreateUser(User newUser) {
-        Role userRole = this.roleRepository.findByName("SUPER_ADMIN");
+        Role userRole = this.roleRepository.findByName("USER");
+        if (userRole == null) {
+            userRole = this.roleRepository.findByName("SUPER_ADMIN");
+        }
         newUser.setRole(userRole);
-        newUser.setAddress("aa");
-        newUser.setPhone("1234567890");
-        newUser.setGender(GenderEnum.MALE);
+        if (newUser.getGender() == null) {
+            newUser.setGender(GenderEnum.MALE);
+        }
+        if (newUser.getAddress() != null) {
+            newUser.setAddress(newUser.getAddress().trim());
+        }
         return this.userRepository.save(newUser);
     }
 
@@ -60,8 +66,8 @@ public class UserService {
         if (optionalUser.isPresent()) {
             user = optionalUser.get();
         }
-        if (updateUser.getAddress() != null) {
-            user.setAddress(updateUser.getAddress());
+        if (updateUser.getAddress() != null && !updateUser.getAddress().isBlank()) {
+            user.setAddress(updateUser.getAddress().trim());
         }
         if (updateUser.getGender() != null) {
             user.setGender(updateUser.getGender());
@@ -73,6 +79,10 @@ public class UserService {
             user.setUsername(updateUser.getUsername());
         }
 
+        return this.userRepository.save(user);
+    }
+
+    public User saveUser(User user) {
         return this.userRepository.save(user);
     }
 
@@ -152,7 +162,7 @@ public class UserService {
     }
 
     public User getUserByRefreshTokenAndEmail(String token, String email) {
-        return this.getUserByRefreshTokenAndEmail(token, email);
+        return this.userRepository.findByRefreshTokenAndEmail(token, email);
     }
 
     public boolean isEmailExist(String email) {

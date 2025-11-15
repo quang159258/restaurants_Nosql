@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
+@Profile("minio")
 @RequiredArgsConstructor
-// @Profile("minio")
 public class MinIOStorageService implements StorageService {
     private final MinioClient minioClient;
 

@@ -9,7 +9,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import java.time.Duration;
 import org.springframework.stereotype.Service;
-import restaurant.example.restaurant.controller.CartController;
 import restaurant.example.restaurant.domain.Cart;
 import restaurant.example.restaurant.domain.CartDetail;
 import restaurant.example.restaurant.domain.Dish;
@@ -19,6 +18,7 @@ import restaurant.example.restaurant.repository.CartDetailRepository;
 import restaurant.example.restaurant.repository.CartRepository;
 import restaurant.example.restaurant.repository.DishRepository;
 import restaurant.example.restaurant.repository.UserRepository;
+import restaurant.example.restaurant.util.ImageUtils;
 import restaurant.example.restaurant.util.error.CartException;
 
 @Service
@@ -44,30 +44,30 @@ public class CartService {
         this.dishRepository = dishRepository;
     }
 
-    public Cart getCartById(Long id) {
-        String redisKey = CART_PREFIX + id;
+    private String buildCartKey(Long userId) {
+        return CART_PREFIX + userId;
+    }
+
+    public Cart getCartByUserId(Long userId) {
+        String redisKey = buildCartKey(userId);
         ValueOperations<String, Object> ops = redisTemplate.opsForValue();
         Object obj = ops.get(redisKey);
         if (obj instanceof Cart) {
             return (Cart) obj;
         }
-        if (this.cartRepository.findById(id).isPresent()) {
-            Cart cart = this.cartRepository.findById(id).get();
-            // đồng bộ lên Redis
-            ops.set(redisKey, cart, Duration.ofSeconds(CART_SESSION_DURATION));
-            return cart;
-        }
-        return null;
+        Cart cart = this.cartRepository.findByUserId(userId).orElseGet(() -> {
+            Cart newCart = new Cart();
+            User user = this.userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+            newCart.setUser(user);
+            return this.cartRepository.save(newCart);
+        });
+        ops.set(redisKey, cart, Duration.ofSeconds(CART_SESSION_DURATION));
+        return cart;
     }
 
-    public void clearCart(Long cartId) {
-        Cart cart = cartRepository.findById(cartId).orElse(null);
-        if (cart != null) {
-            cartRepository.save(cart);
-            // clear trên Redis nữa
-            String redisKey = CART_PREFIX + cartId;
-            redisTemplate.delete(redisKey);
-        }
+    public void evictCartCache(Long userId) {
+        redisTemplate.delete(buildCartKey(userId));
     }
 
     public ResCartItem addToCart(CartDetail request, String email) {
@@ -114,12 +114,11 @@ public class CartService {
         res.setPrice(detail.getPrice());
         res.setTotal(detail.getTotal());
         res.setName(detail.getDish().getName());
-        res.setImageUrl(detail.getDish().getImageUrl());
+        res.setImageUrl(ImageUtils.extractPrimaryImage(detail.getDish().getImageUrl()));
         res.setCategoryName(detail.getDish().getCategory().getName());
         // Sau khi cập nhật cart => đẩy vào Redis
-        String redisKey = CART_PREFIX + cart.getId();
         ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-        ops.set(redisKey, cart, Duration.ofSeconds(CART_SESSION_DURATION));
+        ops.set(buildCartKey(user.getId()), cart, Duration.ofSeconds(CART_SESSION_DURATION));
         return res;
 
     }
@@ -147,7 +146,7 @@ public class CartService {
             res.setPrice(item.getPrice());
             res.setTotal(item.getTotal());
             res.setName(item.getDish().getName());
-            res.setImageUrl(item.getDish().getImageUrl());
+            res.setImageUrl(ImageUtils.extractPrimaryImage(item.getDish().getImageUrl()));
             res.setCategoryName(item.getDish().getCategory().getName());
             lstRes.add(res);
         }

@@ -1,5 +1,5 @@
-import React, { useContext, useState, useEffect } from 'react';
-import { Link, Navigate, NavLink, useNavigate } from 'react-router-dom';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {
     PhoneOutlined,
@@ -12,46 +12,56 @@ import { AuthContext } from '../context/auth.context';
 import { Drawer, Dropdown, message } from 'antd';
 import { DownOutlined } from '@ant-design/icons';
 import { Space } from 'antd';
-import { deleteDishInCart, getAllDishInCart, getCart, logoutAPI, updateQuantity } from '../../services/api.service';
+import { buildImageUrl, deleteDishInCart, getAllDishInCart, getCart, logoutAPI, logoutAllSessionsAPI, updateQuantity } from '../../services/api.service';
 import Notification from '../noti/Notification';
 import NotificationCenter from '../noti/NotificationCenter';
 import food1 from '../../assets/img/food-1.webp';
 
 const Navbar = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const { user, setUser, cart, setCart } = useContext(AuthContext);
+    const { user, setUser, cart, setCart, setAccessToken, resetAuthState } = useContext(AuthContext);
     const [notifications, setNotifications] = useState([]);
     const [open, setOpen] = useState(false);
     const [listItemCart, setListItemCart] = useState([]);
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [cartCount, setCartCount] = useState(cart?.totalItems || 0);
     const navigate = useNavigate(); // thêm
-    const addNotification = (message, description, type) => {
+    const addNotification = (messageText, description, type) => {
         const id = Date.now();
-        const newNotif = { id, message, description, type };
+        const newNotif = { id, message: messageText, description, type };
         setNotifications((prev) => [...prev, newNotif]);
 
 
     };
     const handleLogout = async () => {
-        const res = await logoutAPI();
-        if (res.data) {
-            //clear data
-            localStorage.removeItem("access_token");
-            setUser({
-                email: "",
-                phone: "",
-                fullName: "",
-                role: "",
-                avatar: "",
-                id: ""
-            })
-            setCart([])
-            message.success("Logout thành công.");
+        try {
+            await logoutAPI();
+            message.success("Đăng xuất thành công.");
             addNotification("Logout success", "Đăng xuất thành công", "success");
-            //redirect to home
-            navigate("/");
+        } catch (error) {
+            message.warning("Không thể gọi API logout, đã xoá phiên cục bộ.");
+        } finally {
+            resetAuthState();
+            setAccessToken("");
+            setCartCount(0);
+            setListItemCart([]);
+            navigate("/login");
         }
-    }
+    };
+    const handleLogoutAll = async () => {
+        try {
+            await logoutAllSessionsAPI();
+            message.success("Đã đăng xuất khỏi tất cả thiết bị.");
+        } catch (error) {
+            message.warning("Không thể gọi API logout all, đã xoá phiên cục bộ.");
+        } finally {
+            resetAuthState();
+            setAccessToken("");
+            setCartCount(0);
+            setListItemCart([]);
+            navigate("/login");
+        }
+    };
     const items = [
         {
             key: '1',
@@ -74,49 +84,89 @@ const Navbar = () => {
             danger: true,
             label: <span onClick={() => { handleLogout() }}>Logout</span>,
         },
+        {
+            key: '4',
+            label: <span onClick={() => { handleLogoutAll() }}>Logout all devices</span>,
+        },
 
     ];
 
-    const fetchCart = async () => {
-        const res = await getAllDishInCart();
-        if (res.data) {
+    const fetchCart = useCallback(async () => {
+        if (!user?.id) {
+            setListItemCart([]);
+            setCart({ id: 0, totalItems: 0, totalPrice: 0 });
+            setCartCount(0);
+            return false;
+        }
+        try {
+            const [itemsRes, summaryRes] = await Promise.all([getAllDishInCart(), getCart()]);
+            const items = Array.isArray(itemsRes?.data ?? itemsRes) ? (itemsRes?.data ?? itemsRes) : [];
+            setListItemCart(items);
+            const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+            setCartCount(totalQuantity);
 
-            setListItemCart(res.data);
-            console.log(res.data)
+            const cartData = summaryRes?.data ?? summaryRes;
+            if (cartData) {
+                setCart({
+                    id: cartData.id ?? 0,
+                    totalItems: cartData.totalItems ?? totalQuantity,
+                    totalPrice: cartData.totalPrice ?? 0
+                });
+            } else {
+                setCart({ id: 0, totalItems: totalQuantity, totalPrice: 0 });
+            }
+            return true;
+        } catch (error) {
+            setListItemCart([]);
+            setCart({ id: 0, totalItems: 0, totalPrice: 0 });
+            setCartCount(0);
+            return false;
+        }
+    }, [user?.id, setCart]);
+
+    useEffect(() => {
+        if (user?.id) {
+            fetchCart();
         } else {
             setListItemCart([]);
+            setCartCount(0);
         }
-        const res2 = await getCart();
-        setCart(res2.data)
-    }
+    }, [user?.id, fetchCart]);
 
     const openCart = async () => {
-        const res = await getAllDishInCart();
-        if (res.data) {
-            setListItemCart(res.data);
-            console.log(res.data)
-        } else {
-            setListItemCart([]);
+        if (!user?.id) {
+            message.warning("Vui lòng đăng nhập để xem giỏ hàng.");
+            navigate("/login");
+            return;
         }
-        setOpen(true)
-    }
+        await fetchCart();
+        setOpen(true);
+    };
     const handleQuantityChange = async (id, newQuantity) => {
-        const res = await updateQuantity(id, newQuantity);
-        setListItemCart((prevItems) =>
-            prevItems.map((item) =>
-                item.id === id ? { ...item, quantity: newQuantity } : item
-            )
-        );
-        fetchCart();
-    }
+        try {
+            await updateQuantity(id, newQuantity);
+            setListItemCart((prevItems) =>
+                prevItems.map((item) =>
+                    item.id === id ? { ...item, quantity: Number(newQuantity) } : item
+                )
+            );
+            fetchCart();
+        } catch (error) {
+            message.error("Cập nhật số lượng thất bại. Vui lòng thử lại.");
+        }
+    };
 
     const handleDeleteItem = async (id) => {
-        debugger
-        const res = await deleteDishInCart(id);
-        if (res.data) {
-            fetchCart();
+        try {
+            const res = await deleteDishInCart(id);
+            const isSuccess = (res && res.status && res.status >= 200 && res.status < 300) || res?.data;
+            if (isSuccess) {
+                fetchCart();
+            }
+        } catch (error) {
+            message.error("Xóa món thất bại. Vui lòng thử lại.");
         }
-    }
+    };
 
     const toggleDropdown = () => {
         setDropdownOpen(!dropdownOpen);
@@ -281,7 +331,7 @@ const Navbar = () => {
                                     <li className="position-relative flex items-center justify-center">
                                         <ShoppingCartOutlined style={{ fontSize: 30, color: 'white' }} onClick={() => { openCart() }} />
                                         <span className="position-absolute top-2 start-100 translate-middle badge rounded-pill icon_cart">
-                                            {cart.totalItems}
+                                            {cartCount}
                                         </span>
                                     </li>
                                 </ul>
@@ -296,7 +346,7 @@ const Navbar = () => {
                 {notifications.map((notif) => (
                     <Notification
                         key={notif.id}
-                        message={notif.error}
+                        message={notif.message}
                         description={notif.description}
                         type={notif.type}
                         onClose={() => {
@@ -340,7 +390,7 @@ const Navbar = () => {
                             <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
                                 <img
                                     className="shopping__item__img"
-                                    src={item.imageUrl}
+                                    src={buildImageUrl(item.imageUrl)}
                                     alt={item.name}
                                     style={{ width: '80px', height: '60px', borderRadius: '6px' }}
                                 />
@@ -382,11 +432,11 @@ const Navbar = () => {
 
                 <div style={{ color: "#fff", fontSize: "22px" }}>
                     <span>Total dish : </span>{" "}
-                    <span className="shopping__cart__total">{cart.totalItems} </span>
+                    <span className="shopping__cart__total">{cart?.totalItems ?? 0} </span>
                 </div>
                 <div style={{ color: "#fff", fontSize: "22px" }}>
                     <span>Total price: </span>{" "}
-                    <span className="shopping__cart__total">{cart.totalPrice} đ</span>
+                    <span className="shopping__cart__total">{cart?.totalPrice ?? 0} đ</span>
                 </div>
 
                 <Link to="/confirm" className="comfim">
@@ -404,7 +454,7 @@ const Navbar = () => {
             </Drawer >
 
             {/* WebSocket Notification Center */}
-            <NotificationCenter />
+            <NotificationCenter userRole={user?.role?.name} userId={user?.id} />
 
         </>
     );

@@ -1,17 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Result, Button, Spin, Card, Typography, Space } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@ant-design/icons';
+import { Result, Button, Typography } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { updateOrder } from '../../../services/api.service';
 import Notification from '../../../components/noti/Notification';
 
 const { Title, Text } = Typography;
 
-const VNPayCallback = () => {
+const PaymentResult = () => {
     const [searchParams] = useSearchParams();
-    const [loading, setLoading] = useState(true);
-    const [paymentStatus, setPaymentStatus] = useState(null);
-    const [orderInfo, setOrderInfo] = useState(null);
+    const [paymentStatus, setPaymentStatus] = useState('pending');
+    const [orderInfo, setOrderInfo] = useState({});
     const [notifications, setNotifications] = useState([]);
     const navigate = useNavigate();
 
@@ -22,63 +20,27 @@ const VNPayCallback = () => {
     };
 
     useEffect(() => {
-        const processPaymentCallback = async () => {
-            try {
-                setLoading(true);
+        const status = searchParams.get('status') || 'failed';
+        const message = searchParams.get('message');
+        const orderId = searchParams.get('orderId');
+        const amount = searchParams.get('amount');
 
-                // Lấy thông tin từ URL params
-                const vnp_ResponseCode = searchParams.get('vnp_ResponseCode');
-                const vnp_TransactionStatus = searchParams.get('vnp_TransactionStatus');
-                const vnp_TxnRef = searchParams.get('vnp_TxnRef');
-                const vnp_Amount = searchParams.get('vnp_Amount');
-                const vnp_OrderInfo = searchParams.get('vnp_OrderInfo');
+        setPaymentStatus(status);
+        const decoded = message ? decodeURIComponent(message) : null;
 
-                console.log('VNPAY Callback Params:', {
-                    vnp_ResponseCode,
-                    vnp_TransactionStatus,
-                    vnp_TxnRef,
-                    vnp_Amount,
-                    vnp_OrderInfo
-                });
+        setOrderInfo({
+            orderId,
+            amount: amount ? Number(amount) : null,
+            message: decoded
+        });
 
-                // Kiểm tra kết quả thanh toán
-                if (vnp_ResponseCode === '00' && vnp_TransactionStatus === '00') {
-                    // Thanh toán thành công
-                    setPaymentStatus('success');
-                    
-                    // Cập nhật trạng thái đơn hàng
-                    if (vnp_TxnRef) {
-                        try {
-                            await updateOrder(vnp_TxnRef, 'CONFIRMED');
-                            addNotification('Thanh toán thành công', 'Đơn hàng đã được xác nhận', 'success');
-                        } catch (error) {
-                            console.error('Error updating order:', error);
-                            addNotification('Lỗi cập nhật', 'Không thể cập nhật trạng thái đơn hàng', 'error');
-                        }
-                    }
-
-                    setOrderInfo({
-                        orderId: vnp_TxnRef,
-                        amount: vnp_Amount ? parseInt(vnp_Amount) / 100 : 0,
-                        orderInfo: vnp_OrderInfo
-                    });
-
-                } else {
-                    // Thanh toán thất bại
-                    setPaymentStatus('failed');
-                    addNotification('Thanh toán thất bại', 'Giao dịch không thành công', 'error');
-                }
-
-            } catch (error) {
-                console.error('Payment callback error:', error);
-                setPaymentStatus('error');
-                addNotification('Lỗi xử lý', 'Có lỗi xảy ra khi xử lý thanh toán', 'error');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        processPaymentCallback();
+        if (decoded) {
+            addNotification(status === 'success' ? 'Thanh toán thành công' : 'Thanh toán thất bại', decoded, status === 'success' ? 'success' : 'error');
+        } else if (status === 'success') {
+            addNotification('Thanh toán thành công', 'Đơn hàng của bạn đã được xác nhận', 'success');
+        } else {
+            addNotification('Thanh toán thất bại', 'Giao dịch không thành công', 'error');
+        }
     }, [searchParams]);
 
     const handleContinueShopping = () => {
@@ -88,18 +50,6 @@ const VNPayCallback = () => {
     const handleViewOrders = () => {
         navigate('/order');
     };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <Card className="text-center p-8">
-                    <Spin size="large" />
-                    <Title level={3} className="mt-4">Đang xử lý thanh toán...</Title>
-                    <Text type="secondary">Vui lòng chờ trong giây lát</Text>
-                </Card>
-            </div>
-        );
-    }
 
     if (paymentStatus === 'success') {
         return (
@@ -112,11 +62,13 @@ const VNPayCallback = () => {
                             subTitle={
                                 <div className="text-center">
                                     <Text>Đơn hàng của bạn đã được xác nhận</Text>
-                                    {orderInfo && (
+                                    {orderInfo?.orderId && (
                                         <div className="mt-4 p-4 bg-green-50 rounded">
                                             <Text strong>Mã đơn hàng: {orderInfo.orderId}</Text>
                                             <br />
-                                            <Text strong>Số tiền: {orderInfo.amount?.toLocaleString()} VND</Text>
+                                            {orderInfo.amount && (
+                                                <Text strong>Số tiền: {orderInfo.amount?.toLocaleString('vi-VN')} VND</Text>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -137,7 +89,7 @@ const VNPayCallback = () => {
         );
     }
 
-    if (paymentStatus === 'failed') {
+    if (paymentStatus !== 'success') {
         return (
             <div className="min-h-screen bg-gray-50 py-8">
                 <div className="container mx-auto px-4">
@@ -145,7 +97,7 @@ const VNPayCallback = () => {
                         <Result
                             icon={<CloseCircleOutlined style={{ color: '#ff4d4f' }} />}
                             title="Thanh toán thất bại"
-                            subTitle="Giao dịch không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."
+                            subTitle={orderInfo?.message || "Giao dịch không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."}
                             extra={[
                                 <Button type="primary" key="retry" onClick={() => navigate('/payment')}>
                                     Thử lại
@@ -161,26 +113,6 @@ const VNPayCallback = () => {
             </div>
         );
     }
-
-    return (
-        <div className="min-h-screen bg-gray-50 py-8">
-            <div className="container mx-auto px-4">
-                <div className="max-w-2xl mx-auto">
-                    <Result
-                        icon={<CloseCircleOutlined style={{ color: '#ff4d4f' }} />}
-                        title="Có lỗi xảy ra"
-                        subTitle="Không thể xử lý kết quả thanh toán. Vui lòng liên hệ hỗ trợ."
-                        extra={[
-                            <Button type="primary" key="home" onClick={handleContinueShopping}>
-                                Về trang chủ
-                            </Button>,
-                        ]}
-                    />
-                </div>
-            </div>
-            <Notification notifications={notifications} />
-        </div>
-    );
 };
 
-export default VNPayCallback;
+export default PaymentResult;

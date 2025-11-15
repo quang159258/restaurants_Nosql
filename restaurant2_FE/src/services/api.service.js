@@ -1,39 +1,70 @@
-// import axios from "axios";
-import { Avatar } from 'antd';
 import axios from './axios.customize';
 
-const createUserApi = (username, password, email) => {
+const API_PREFIX = "/api/v1";
+const AUTH_BASE = `${API_PREFIX}/auth`;
+const USER_BASE = "/users";
+const DISH_BASE = "/dish";
+const CATEGORY_BASE = "/category";
+const CART_BASE = "/cart";
+const ORDER_BASE = "/orders";
+const ANALYTICS_BASE = `${API_PREFIX}/analytics`;
+const INVENTORY_BASE = `${API_PREFIX}/inventory`;
+const PERMISSION_BASE = "/permissions";
+const ROLE_BASE = "/roles";
+const PAYMENT_BASE = "/api/payment";
 
-    const URL_BACKEND = "/api/v1/auth/register";
-    const data = {
-        username: username,
-        password: password,
-        email: email,
+const buildPaginationParams = (page = 1, size = 10) => {
+    const safePage = Number(page) || 1;
+    const safeSize = Number(size) || 10;
+    return `page=${safePage}&size=${safeSize}`;
+};
+
+const normalizeImageName = (fileName) => {
+    if (!fileName) return "";
+    let trimmed = fileName.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed[0];
+            }
+        } catch (error) {
+            const inner = trimmed.slice(1, trimmed.length - 1);
+            const parts = inner.split(",");
+            if (parts.length > 0) {
+                trimmed = parts[0];
+            }
+        }
     }
-    return axios.post(URL_BACKEND, data)
-}
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        trimmed = trimmed.slice(1, -1);
+    }
+    return trimmed;
+};
+
+const createUserApi = (payload) => {
+    return axios.post(`${AUTH_BASE}/register`, payload);
+};
 
 const updateUserApi = (id, username, gender, phone, address) => {
-    const URL_BACKEND = "/users";
     const data = {
-        id: id,
-        username: username,
-        gender: gender,
-        phone: phone,
-        address: address
+        id,
+        username,
+        gender,
+        phone,
+        address
     };
 
-    return axios.put(URL_BACKEND, data);
+    return axios.put(`${USER_BASE}`, data);
 };
 const fetchAllUserAPI = (current, pageSize) => {
-    const URL_BACKEND = `/api/v1/user?current=${current}&pageSize=${pageSize}`;
-    return axios.get(URL_BACKEND)
-}
+    const query = buildPaginationParams(current, pageSize);
+    return axios.get(`${USER_BASE}?${query}`);
+};
 
 const deleteUserAPI = (id) => {
-    const URL_BACKEND = `/api/v1/user/${id}`;//backtick
-    return axios.delete(URL_BACKEND);
-}
+    return axios.delete(`${USER_BASE}/${id}`);
+};
 
 const handleUploadFile = (file) => {
 
@@ -63,60 +94,61 @@ const updateUserAvatarApi = (avatar, _id, fullName, phone) => {
     return axios.put(URL_BACKEND, data)
 }
 
-const registerUserApi = (fullName, email, password, phone) => {
-
-    const URL_BACKEND = "/api/v1/user/register";
-    const data = {
-        fullName: fullName,
-        email: email,
-        password: password,
-        phone: phone,
-    }
-    return axios.post(URL_BACKEND, data)
-}
+const registerUserApi = (fullName, email, password, phone, address) => {
+    return createUserApi({
+        username: fullName,
+        password,
+        email,
+        phone,
+        address,
+    });
+};
 
 
 const loginApi = (username, password) => {
 
-    const URL_BACKEND = "/api/v1/auth/login";
     const data = {
-        username: username,
-        password: password,
+        username,
+        password,
 
     }
-    return axios.post(URL_BACKEND, data)
-}
+    return axios.post(`${AUTH_BASE}/login`, data);
+};
 
 
 const getAccountAPI = () => {
-    const URL_BACKEND = "/api/v1/auth/account";
-    return axios.get(URL_BACKEND);
-}
+    return axios.get(`${AUTH_BASE}/account`);
+};
 
 const logoutAPI = () => {
-    const URL_BACKEND = "/api/v1/auth/logout";
-    // const URL_BACKEND = "/logout";
-    return axios.post(URL_BACKEND);
-}
+    return axios.post(`${AUTH_BASE}/logout`);
+};
+
+const logoutAllSessionsAPI = () => {
+    return axios.post(`${AUTH_BASE}/logout-all`);
+};
 
 const fetchAllDish = (page, size, type) => {
 
-    const URL_BACKEND = type == 1 ? `/dish?page=${page}&size=${size}` : `/dish?page=${page}&size=${size}?&filter=category.id~'${type}'`;
-    return axios.get(URL_BACKEND)
-}
+    let URL_BACKEND = `${DISH_BASE}?${buildPaginationParams(page, size)}`;
+    if (type && type !== 1 && type !== "all") {
+        URL_BACKEND += `&filter=category.id~'${type}'`;
+    }
+    return axios.get(URL_BACKEND);
+};
 
 const fetchAllDishByName = (page, size, Name) => {
 
-    const url = `/dish?page=${page}&size=${size}&filter=name~'${Name}'`;
+    const url = `${DISH_BASE}?${buildPaginationParams(page, size)}&filter=name~'${Name}'`;
     return axios.get(url);
 }
 
 const adDishInCart = (quantity, price, total, DishID) => {
-    const URL_BACKEND = "/cart/add-dish";
+    const URL_BACKEND = `${CART_BASE}/add-dish`;
     const data = {
-        quantity: quantity,
-        price: price,
-        total: total,
+        quantity,
+        price,
+        total,
         dish: {
             id: DishID
         }
@@ -127,81 +159,69 @@ const adDishInCart = (quantity, price, total, DishID) => {
 
 
 const getCart = () => {
-    const URL_BACKEND = "/cart";
-    return axios.get(URL_BACKEND)
-}
+    return axios.get(`${CART_BASE}`);
+};
 
 const getAllDishInCart = () => {
-    const URL_BACKEND = "/cart/get-all-dish";
-    return axios.get(URL_BACKEND)
-}
+    return axios.get(`${CART_BASE}/get-all-dish`);
+};
 
 const updateQuantity = (id, quantity) => {
-    const URL_BACKEND = "/cart/update-dish";
+    const URL_BACKEND = `${CART_BASE}/update-dish`;
     const data = {
-        id: id,
-        quantity: quantity,
+        id,
+        quantity,
     }
     return axios.put(URL_BACKEND, data)
 }
 
 const deleteDishInCart = (id) => {
-    const URL_BACKEND = `cart/delete-dish/${id}`;
-    return axios.delete(URL_BACKEND)
-}
+    const URL_BACKEND = `${CART_BASE}/delete-dish/${id}`;
+    return axios.delete(URL_BACKEND);
+};
 
 const checkOutCart = (receiverName, receiverPhone, receiverAddress, receiverEmail, paymentMethod) => {
-    const URL_BACKEND = "/cart/checkout";
+    const URL_BACKEND = `${CART_BASE}/checkout`;
     const data = {
-        receiverName: receiverName,
-        receiverPhone: receiverPhone,
-        receiverAddress: receiverAddress,
-        receiverEmail: receiverEmail,
-        paymentMethod: paymentMethod
+        receiverName,
+        receiverPhone,
+        receiverAddress,
+        receiverEmail,
+        paymentMethod
     }
     return axios.post(URL_BACKEND, data)
 }
 
 
 const fetchMyOrder = () => {
-    const URL_BACKEND = "/orders/my";
-    return axios.get(URL_BACKEND)
-}
+    return axios.get(`${ORDER_BASE}/my`);
+};
 
 
 const fetchAllOrders = (page, size) => {
 
-    const URL_BACKEND = `/orders/all?page=${page}&size=${size}`;
-    return axios.get(URL_BACKEND)
-}
+    const URL_BACKEND = `${ORDER_BASE}/all?${buildPaginationParams(page, size)}`;
+    return axios.get(URL_BACKEND);
+};
 
 const fetchAllOrdersMy = (page, size) => {
 
-    const URL_BACKEND = `/orders/my?page=${page}&size=${size}`;
-    return axios.get(URL_BACKEND)
-}
+    const URL_BACKEND = `${ORDER_BASE}/my?${buildPaginationParams(page, size)}`;
+    return axios.get(URL_BACKEND);
+};
+
+const createOrderByAdmin = (payload) => {
+    return axios.post(`${ORDER_BASE}/admin`, payload);
+};
 
 const updateOrder = async (id, status) => {
-    // debugger
-    const URL_BACKEND = `/orders/status/${id}`;
-    const formData = new FormData();
-    formData.append("status", status);
-
-    let config = {
-        headers: {
-            "Content-Type": "form-data"
-        }
-    }
-
-
-    return axios.put(URL_BACKEND, formData, config);
+    const URL_BACKEND = `${ORDER_BASE}/status/${id}?status=${status}`;
+    return axios.put(URL_BACKEND);
 };
 
 
 const updateDish = async (dishData) => {
-    debugger
-    const URL_BACKEND = "/dish";
-    console.log("check id ", dishData.name)
+    const URL_BACKEND = `${DISH_BASE}`;
     const data = {
         id: dishData.id,
         name: dishData.name,
@@ -219,16 +239,13 @@ const updateDish = async (dishData) => {
 
 
 const deleteDish = (id) => {
-    const URL_BACKEND = `/dish/${id}`;
-    return axios.delete(URL_BACKEND)
-}
+    const URL_BACKEND = `${DISH_BASE}/${id}`;
+    return axios.delete(URL_BACKEND);
+};
 
 const addDish = (dishData) => {
-    const URL_BACKEND = "/dish";
-    console.log("check id ", dishData.name)
-    console.log("dishData.categoryId:", dishData.categoryId)
-    console.log("dishData:", dishData)
-    
+    const URL_BACKEND = `${DISH_BASE}`;
+
     if (!dishData.categoryId) {
         throw new Error("Category ID is required");
     }
@@ -243,163 +260,176 @@ const addDish = (dishData) => {
             id: dishData.categoryId
         }
     }
-    console.log("Sending data to backend:", data)
     return axios.post(URL_BACKEND, data);
 }
 
-const getImageUrl = async (fileName) => {
-    try {
-        const res = await axios.get(`http://localhost:8081/pre-signed-url/${fileName}`);
-        return res.data; // Trả về URL thực tế
-    } catch (error) {
-        console.error("Lỗi khi lấy URL ảnh:", error);
-        return ""; // Trả về chuỗi rỗng nếu lỗi
+const resolveBackendBaseUrl = () => {
+    if (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL.trim() !== "") {
+        return import.meta.env.VITE_BACKEND_URL.trim();
     }
+    if (typeof window !== "undefined" && window.__APP_BACKEND_URL__) {
+        return window.__APP_BACKEND_URL__;
+    }
+    return "http://localhost:8081";
+};
+
+const buildImageUrl = (fileName) => {
+    const normalized = normalizeImageName(fileName);
+    if (!normalized) return "";
+    if (normalized.startsWith("http")) {
+        return normalized;
+    }
+    const baseUrl = resolveBackendBaseUrl();
+    const normalizedBase = baseUrl.endsWith("/")
+        ? baseUrl.slice(0, -1)
+        : baseUrl;
+    const normalizedPath = normalized.startsWith("/images") || normalized.startsWith("/files")
+        ? normalized
+        : `/images/${normalized}`;
+    const cleanedPath = normalizedPath.startsWith("/")
+        ? normalizedPath
+        : `/${normalizedPath}`;
+    return `${normalizedBase}${cleanedPath}`;
+};
+
+const getImageUrl = async (fileName) => {
+    return buildImageUrl(fileName);
 };
 
 // Utility function để xử lý image URL
 const getImageUrlFromFileName = (fileName) => {
-    if (!fileName) return "";
-    
-    // Nếu đã là URL đầy đủ, trả về luôn
-    if (fileName.startsWith('http')) {
-        return fileName;
-    }
-    
-    // Nếu chỉ là tên file, tạo URL trực tiếp từ MinIO
-    return `http://localhost:9000/restaurant/${fileName}`;
+    return buildImageUrl(fileName);
 };
 
 
 
 const fetchAllUser = (page, size) => {
-    const URL_BACKEND = `/users?page=${page}&size=${size}`;
-    return axios.get(URL_BACKEND)
-}
+    return fetchAllUserAPI(page, size);
+};
 
 const fetchAllOrderById = (page, size, id) => {
-    const url = `/orders/all?page=${page}&size=${size}?&filter=category.id~'${type}'`;
+    const url = `${ORDER_BASE}/all?${buildPaginationParams(page, size)}&filter=id==${id}`;
     return axios.get(url);
-}
+};
 
 const loginWithGoogle = (apiGoogle) => {
     return axios.post(apiGoogle);
 }
 
+const changePassword = ({ currentPassword, newPassword }) => {
+    return axios.put(`${AUTH_BASE}/change-password`, { currentPassword, newPassword });
+};
+
+const getVnpayConfig = () => {
+    return axios.get(`${PAYMENT_BASE}/vnpay/config`);
+};
+
+const createVnpayPaymentLink = (orderId) => {
+    return axios.post(`${PAYMENT_BASE}/vnpay/order/${orderId}`);
+};
+
+const getAnalyticsOverview = (params = {}) => {
+    const query = new URLSearchParams();
+    const { startDate, endDate, topLimit } = params;
+
+    if (startDate) {
+        query.append("startDate", startDate);
+    }
+    if (endDate) {
+        query.append("endDate", endDate);
+    }
+    if (topLimit !== undefined && topLimit !== null) {
+        query.append("topLimit", topLimit);
+    }
+
+    const queryString = query.toString();
+    const url = `${ANALYTICS_BASE}/overview${queryString ? `?${queryString}` : ""}`;
+    return axios.get(url);
+};
+
 // Simple Payment APIs
 const confirmCashPayment = (orderId) => {
-    const URL_BACKEND = `/api/payment/cash/confirm/${orderId}`;
+    const URL_BACKEND = `${PAYMENT_BASE}/cash/confirm/${orderId}`;
     return axios.post(URL_BACKEND);
 };
 
-const handleVNPayCallback = (callbackData) => {
-    const URL_BACKEND = `/api/payment/vnpay/callback`;
-    return axios.post(URL_BACKEND, callbackData);
-};
-
 const getOrderInfo = (orderId) => {
-    const URL_BACKEND = `/api/payment/order/${orderId}`;
+    const URL_BACKEND = `${PAYMENT_BASE}/order/${orderId}`;
     return axios.get(URL_BACKEND);
-};
-
-const paymentCallback = (vnp_ResponseCode, vnp_TxnRef) => {
-    const URL_BACKEND = "/cart/call-back-vnpay";
-    const data = {
-        vnp_ResponseCode,
-        vnp_TxnRef
-    };
-    return axios.post(URL_BACKEND, data);
 };
 
 // Category CRUD Operations
 const fetchAllCategories = () => {
-    const URL_BACKEND = "/category";
-    return axios.get(URL_BACKEND);
+    return axios.get(`${CATEGORY_BASE}`);
 };
 
 const fetchCategoryById = (id) => {
-    const URL_BACKEND = `/category/${id}`;
-    return axios.get(URL_BACKEND);
+    return axios.get(`${CATEGORY_BASE}/${id}`);
 };
 
 const createCategory = (categoryData) => {
-    const URL_BACKEND = "/category";
-    return axios.post(URL_BACKEND, categoryData);
+    return axios.post(`${CATEGORY_BASE}`, categoryData);
 };
 
 const updateCategory = (id, categoryData) => {
-    const URL_BACKEND = `/category/${id}`;
-    return axios.put(URL_BACKEND, categoryData);
+    return axios.put(`${CATEGORY_BASE}/${id}`, categoryData);
 };
 
 const deleteCategory = (id) => {
-    const URL_BACKEND = `/category/${id}`;
-    return axios.delete(URL_BACKEND);
+    return axios.delete(`${CATEGORY_BASE}/${id}`);
 };
 
 // Inventory Management APIs
 const importStock = (dishId, data) => {
-    const URL_BACKEND = `/api/v1/inventory/import/${dishId}`;
+    const URL_BACKEND = `${INVENTORY_BASE}/import/${dishId}`;
     return axios.post(URL_BACKEND, data);
 };
 
 const updateStock = (dishId, data) => {
-    const URL_BACKEND = `/api/v1/inventory/stock/${dishId}`;
+    const URL_BACKEND = `${INVENTORY_BASE}/stock/${dishId}`;
     return axios.put(URL_BACKEND, data);
 };
 
 // Permission Management APIs
 const fetchAllPermissions = (page = 1, size = 100) => {
-    const URL_BACKEND = `/permissions?page=${page}&size=${size}`;
+    const URL_BACKEND = `${PERMISSION_BASE}?${buildPaginationParams(page, size)}`;
     return axios.get(URL_BACKEND);
 };
 
 const createPermission = (data) => {
-    const URL_BACKEND = `/permissions`;
-    return axios.post(URL_BACKEND, data);
+    return axios.post(`${PERMISSION_BASE}`, data);
 };
 
 const updatePermission = (data) => {
-    const URL_BACKEND = `/permissions`;
-    return axios.put(URL_BACKEND, data);
+    return axios.put(`${PERMISSION_BASE}`, data);
 };
 
 const deletePermission = (id) => {
-    const URL_BACKEND = `/permissions/${id}`;
-    return axios.delete(URL_BACKEND);
+    return axios.delete(`${PERMISSION_BASE}/${id}`);
 };
 
 // Role Management APIs
 const fetchAllRoles = (page = 1, size = 100) => {
-    const URL_BACKEND = `/roles?page=${page}&size=${size}`;
+    const URL_BACKEND = `${ROLE_BASE}?${buildPaginationParams(page, size)}`;
     return axios.get(URL_BACKEND);
 };
 
 const createRole = (data) => {
-    const URL_BACKEND = `/roles`;
-    return axios.post(URL_BACKEND, data);
+    return axios.post(`${ROLE_BASE}`, data);
 };
 
 const updateRole = (data) => {
-    const URL_BACKEND = `/roles`;
-    return axios.put(URL_BACKEND, data);
+    return axios.put(`${ROLE_BASE}`, data);
 };
 
 const deleteRole = (id) => {
-    const URL_BACKEND = `/roles/${id}`;
-    return axios.delete(URL_BACKEND);
-};
-
-// VNPAY Payment APIs
-const createVNPayPayment = (orderData) => {
-    const URL_BACKEND = `/api/v1/payment/vnpay/create`;
-    return axios.post(URL_BACKEND, orderData);
+    return axios.delete(`${ROLE_BASE}/${id}`);
 };
 
 export {
     createUserApi, fetchAllUserAPI, updateUserApi,
     deleteUserAPI, handleUploadFile, updateUserAvatarApi,
-    registerUserApi, loginApi, getAccountAPI, logoutAPI,
+    registerUserApi, loginApi, getAccountAPI, logoutAPI, logoutAllSessionsAPI,
     fetchAllCategories,
     fetchCategoryById,
     createCategory,
@@ -408,10 +438,14 @@ export {
     fetchAllDish, adDishInCart, getCart, getAllDishInCart,
     updateQuantity, deleteDishInCart, checkOutCart, fetchMyOrder, updateDish, deleteDish,
     fetchAllDishByName, addDish, fetchAllOrders, updateOrder, getImageUrl, getImageUrlFromFileName, fetchAllUser, fetchAllOrdersMy,
-    loginWithGoogle, paymentCallback,
+    createOrderByAdmin,
+    loginWithGoogle,
     importStock, updateStock,
     fetchAllPermissions, createPermission, updatePermission, deletePermission,
     fetchAllRoles, createRole, updateRole, deleteRole,
-    createVNPayPayment,
-    confirmCashPayment, getOrderInfo, handleVNPayCallback
+    confirmCashPayment, getOrderInfo, getAnalyticsOverview,
+    buildImageUrl,
+    changePassword,
+    getVnpayConfig,
+    createVnpayPaymentLink
 }

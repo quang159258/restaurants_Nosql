@@ -20,12 +20,14 @@ import restaurant.example.restaurant.domain.User;
 import restaurant.example.restaurant.domain.response.ResCreateUserDTO;
 import restaurant.example.restaurant.domain.response.ResLoginDTO;
 import restaurant.example.restaurant.domain.request.ReqLoginDTO;
+import restaurant.example.restaurant.domain.request.ChangePasswordRequest;
 import restaurant.example.restaurant.service.UserService;
 import restaurant.example.restaurant.util.SecurityUtil;
 import restaurant.example.restaurant.util.anotation.ApiMessage;
 import restaurant.example.restaurant.util.error.IdInvalidException;
 import restaurant.example.restaurant.service.SessionService;
 import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.Cookie;
 
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -46,6 +49,8 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     @Value("${restaurant.jwt.refresh-token-validity-in-seconds}")
     private long refreshJwtExpiration;
+    @Value("${app.security.cookie-secure:false}")
+    private boolean cookieSecure;
 
     @Autowired
     private SessionService sessionService;
@@ -60,8 +65,9 @@ public class AuthController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    @PostMapping("auth/login")
-    public ResponseEntity<ResLoginDTO> login(@RequestBody ReqLoginDTO loginDTO, HttpServletResponse response) throws IdInvalidException {
+    @PostMapping("/auth/login")
+    public ResponseEntity<ResLoginDTO> login(@RequestBody ReqLoginDTO loginDTO, HttpServletRequest request,
+            HttpServletResponse response) throws IdInvalidException {
         // Nạp input gồm username/password vào Security
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                 loginDTO.getUsername(), loginDTO.getPassword());
@@ -84,17 +90,30 @@ public class AuthController {
         }
         String access_token = this.securityUtil.createAccessToken(authentication.getName(), res.getUser());
         res.setAccessToken(access_token);
+        String refreshToken = this.securityUtil.createRefreshToken(authentication.getName(), res);
+        this.userService.updateUserToken(refreshToken, currentUserBD.getEmail());
 
         // Tạo sessionId mapping tới userId lưu trên Redis
-        String sessionId = sessionService.createSession(currentUserBD.getId());
+        String userAgent = request != null ? request.getHeader("User-Agent") : null;
+        String clientIp = request != null ? request.getRemoteAddr() : null;
+        String sessionId = sessionService.createSession(currentUserBD.getId(), userAgent, clientIp);
         Cookie sessionCookie = new Cookie("SESSIONID", sessionId);
         sessionCookie.setHttpOnly(true);
         sessionCookie.setPath("/");
         sessionCookie.setMaxAge(86400); // 1 ngày
-        sessionCookie.setSecure(true);
+        sessionCookie.setSecure(cookieSecure);
         response.addCookie(sessionCookie);
 
-        return ResponseEntity.ok().body(res);
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", refreshToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .path("/")
+                .maxAge(refreshJwtExpiration)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .body(res);
     }
 
     @PostMapping("/auth/register")
@@ -114,7 +133,7 @@ public class AuthController {
                 .body(this.userService.convertToResCreateUserDTO(ericUser));
     }
 
-    @GetMapping("auth/account")
+    @GetMapping("/auth/account")
     @ApiMessage("fetch account")
     public ResponseEntity<ResLoginDTO.UserGetAccount> getAccount() {
         String email = SecurityUtil.getCurrentUserLogin().isPresent() ? SecurityUtil.getCurrentUserLogin().get() : "";
@@ -130,7 +149,7 @@ public class AuthController {
             userGetAccount.setPhone(currentUserDB.getPhone());
             userGetAccount.setGender(currentUserDB.getGender().name());
             userGetAccount.setAddress(currentUserDB.getAddress());
-
+            userGetAccount.setAddressParts(AddressHelper.split(currentUserDB.getAddress()));
         }
 
         return ResponseEntity.ok().body(userGetAccount);
@@ -171,12 +190,12 @@ public class AuthController {
         String newRefreshToken = this.securityUtil.createRefreshToken(email, res);
 
         // update user
-        this.userService.updateUserToken(refresh_token, email);
+        this.userService.updateUserToken(newRefreshToken, email);
 
         // set cookies
         ResponseCookie responseCookies = ResponseCookie
                 .from("refresh_token", newRefreshToken).httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .path("/")
                 .maxAge(refreshJwtExpiration)
                 .build();
@@ -187,7 +206,8 @@ public class AuthController {
 
     @PostMapping("/auth/logout")
     @ApiMessage("Logout user ")
-    public ResponseEntity<Void> logout(@CookieValue(name = "SESSIONID", required = false) String sessionId, HttpServletResponse response) {
+    public ResponseEntity<Void> logout(@CookieValue(name = "SESSIONID", required = false) String sessionId,
+            HttpServletResponse response) {
         if (sessionId != null) {
             sessionService.deleteSession(sessionId);
 
@@ -195,10 +215,90 @@ public class AuthController {
             sessionCookie.setPath("/");
             sessionCookie.setMaxAge(0);
             sessionCookie.setHttpOnly(true);
-            sessionCookie.setSecure(true);
+            sessionCookie.setSecure(cookieSecure);
             response.addCookie(sessionCookie);
         }
-        return ResponseEntity.ok().build();
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", "")
+                .path("/")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .maxAge(0)
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .build();
     }
 
+    @PostMapping("/auth/logout-all")
+    @ApiMessage("Logout all user sessions")
+    public ResponseEntity<Void> logoutAllDevices(HttpServletResponse response) throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin().orElse("");
+        if (email.isEmpty()) {
+            throw new IdInvalidException("Không xác định được người dùng hiện tại");
+        }
+        User currentUser = this.userService.handelGetUserByUsername(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Tài khoản không tồn tại");
+        }
+        sessionService.deleteAllSessionsForUser(currentUser.getId());
+
+        Cookie sessionCookie = new Cookie("SESSIONID", null);
+        sessionCookie.setPath("/");
+        sessionCookie.setMaxAge(0);
+        sessionCookie.setHttpOnly(true);
+        sessionCookie.setSecure(cookieSecure);
+        response.addCookie(sessionCookie);
+
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", "")
+                .path("/")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .maxAge(0)
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .build();
+    }
+
+    private static final class AddressHelper {
+        private AddressHelper() {
+        }
+
+        private static java.util.List<String> split(String address) {
+            if (address == null || address.isBlank()) {
+                return java.util.Collections.emptyList();
+            }
+            String[] parts = address.split("\\s*,\\s*");
+            java.util.List<String> result = new java.util.ArrayList<>();
+            for (String part : parts) {
+                if (!part.isBlank()) {
+                    result.add(part.trim());
+                }
+            }
+            return result;
+        }
+    }
+
+    @PutMapping("/auth/change-password")
+    @ApiMessage("Change password")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request)
+            throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin().orElse("");
+        if (email.isEmpty()) {
+            throw new IdInvalidException("Không xác định được người dùng hiện tại");
+        }
+        User currentUser = this.userService.handelGetUserByUsername(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Tài khoản không tồn tại");
+        }
+        if (!passwordEncoder.matches(request.getCurrentPassword(), currentUser.getPassword())) {
+            throw new IdInvalidException("Mật khẩu hiện tại không chính xác");
+        }
+        if (request.getNewPassword().length() < 6) {
+            throw new IdInvalidException("Mật khẩu mới phải có ít nhất 6 ký tự");
+        }
+        currentUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        this.userService.saveUser(currentUser);
+        return ResponseEntity.ok().build();
+    }
 }

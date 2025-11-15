@@ -1,54 +1,119 @@
 import axios from "axios";
-// Set config defaults when creating the instance
-//console.log(import.meta.env.VITE_BACKEND_URL)
-//debugger;
-
 import NProgress from 'nprogress';
+import { clearStoredAccessToken, getStoredAccessToken, updateStoredAccessToken } from "../utils/token";
 
 NProgress.configure({
     showSpinner: false,
     trickleSpeed: 100,
 });
 
+const baseURL = import.meta.env.VITE_BACKEND_URL || "";
+
 const instance = axios.create({
-    // baseURL: import.meta.env.VITE_BACKEND_URL
-    baseURL: import.meta.env.VITE_BACKEND_URL
+    baseURL,
+    withCredentials: true,
 });
-// Alter defaults after instance has been created
-//   instance.defaults.headers.common['Authorization'] = AUTH_TOKEN;
-// Add a request interceptor
-instance.interceptors.request.use(function (config) {
-    NProgress.start();
-    if (typeof window !== "undefined" && window && window.localStorage && window.localStorage.getItem('access_token')) {
-        config.headers.Authorization = 'Bearer ' + window.localStorage.getItem('access_token');
+
+const refreshClient = axios.create({
+    baseURL,
+    withCredentials: true,
+});
+
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach((promise) => {
+        if (error) {
+            promise.reject(error);
+        } else {
+            promise.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+const refreshAccessToken = async () => {
+    const response = await refreshClient.get("/api/v1/auth/refresh");
+    const data = response?.data ?? response;
+    const payload = data?.data ?? data;
+    const newAccessToken = payload?.access_token || payload?.accessToken || data?.access_token;
+    if (!newAccessToken) {
+        throw new Error("Không thể làm mới access token");
     }
-    // Do something before request is sent
-    return config;
-}, function (error) {
-    NProgress.done();
+    updateStoredAccessToken(newAccessToken);
+    return newAccessToken;
+};
 
-    // Do something with request error
-    return Promise.reject(error);
-});
+instance.interceptors.request.use(
+    (config) => {
+        NProgress.start();
+        const token = getStoredAccessToken();
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        NProgress.done();
+        return Promise.reject(error);
+    }
+);
 
-
-
-// Add a response interceptor
-instance.interceptors.response.use(function (response) {
-    // Any status code that lie within the range of 2xx cause this function to trigger
-    // Do something with response data
-    //  debugger
-    //console.log(" check inside interceptor  ", response);
-    NProgress.done();
-    if (response.data && response.data.data) return response.data;
+const unwrapResponse = (response) => {
+    if (response?.data && response.data.data !== undefined) {
+        return response.data;
+    }
     return response;
-}, function (error) {
-    NProgress.done();
+};
 
-    //debugger
-    // Any status codes that falls outside the range of 2xx cause this function to trigger
-    // Do something with response error
-    if (error.response && error.response.data) return error.response.data;
-    return Promise.reject(error);
-});
+instance.interceptors.response.use(
+    (response) => {
+        NProgress.done();
+        return unwrapResponse(response);
+    },
+    (error) => {
+        NProgress.done();
+        const originalRequest = error.config || {};
+        const status = error.response?.status;
+
+        if (status === 401 && !originalRequest._retry) {
+            if (originalRequest.url?.includes("/auth/login") || originalRequest.url?.includes("/auth/refresh")) {
+                return Promise.reject(error.response?.data || error);
+            }
+
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((token) => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return instance(originalRequest);
+                }).catch((err) => Promise.reject(err));
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            return new Promise((resolve, reject) => {
+                refreshAccessToken()
+                    .then((newToken) => {
+                        isRefreshing = false;
+                        processQueue(null, newToken);
+                        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                        resolve(instance(originalRequest));
+                    })
+                    .catch((refreshError) => {
+                        isRefreshing = false;
+                        processQueue(refreshError, null);
+                        clearStoredAccessToken();
+                        reject(refreshError.response?.data || refreshError);
+                    });
+            });
+        }
+
+        return Promise.reject(error);
+    }
+);
+
 export default instance;
+

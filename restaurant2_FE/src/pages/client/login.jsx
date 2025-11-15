@@ -6,6 +6,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { loginApi } from '../../services/api.service';
 import Notification from '../../components/noti/Notification';
 import { AuthContext } from '../../components/context/auth.context';
+import { persistAccessToken } from '../../utils/token';
 
 const LoginPage = () => {
     const [form] = Form.useForm();
@@ -16,13 +17,13 @@ const LoginPage = () => {
     const [passwordError, setPasswordError] = useState('');
     const [remember, setRemember] = useState(true);
     const navigate = useNavigate();
-    const { user, setUser } = useContext(AuthContext);
+    const { user, setUser, setAccessToken } = useContext(AuthContext);
 
     const [notifications, setNotifications] = useState([]);
     
-    const addNotification = (message, description, type) => {
+    const addNotification = (messageText, description, type) => {
         const id = Date.now();
-        const newNotif = { id, message, description, type };
+        const newNotif = { id, message: messageText, description, type };
         setNotifications((prev) => [...prev, newNotif]);
 
 
@@ -58,17 +59,9 @@ const LoginPage = () => {
             const res = await loginApi(email, password);
             if (res && res.data) {
                 const { access_token, user } = res.data;
-                
-                // Save token to localStorage if remember is true
-                if (remember) {
-                    localStorage.setItem('access_token', access_token);
-                } else {
-                    // Use sessionStorage for non-remembered sessions
-                    sessionStorage.setItem('access_token', access_token);
-                }
-
-                // Update user context
+                persistAccessToken(access_token, remember);
                 setUser(user);
+                setAccessToken(access_token);
                 addNotification("Login successful", "Welcome back!", "success");
 
                 // Redirect based on user role
@@ -238,7 +231,7 @@ const LoginPage = () => {
                 {notifications.map((notif) => (
                     <Notification
                         key={notif.id}
-                        message={notif.error}
+                        message={notif.message}
                         description={notif.description}
                         type={notif.type}
                         onClose={() => {

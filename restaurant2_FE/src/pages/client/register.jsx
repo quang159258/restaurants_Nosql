@@ -1,228 +1,179 @@
 import React, { useState } from 'react';
-import { Input, Button } from 'antd';
-import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Form, Input, Row, Typography } from 'antd';
+import { UserOutlined, MailOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
 import bg from '../../assets/img/bg_3.jpg.webp';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserApi } from '../../services/api.service';
+import { registerUserApi } from '../../services/api.service';
 import Notification from '../../components/noti/Notification';
+import AddressSelector from '../../components/common/AddressSelector';
+
+const { Title, Text } = Typography;
 
 const RegisterPage = () => {
-    const [username, setUsername] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setPasswordConfirm] = useState('');
-    const [usernameError, setUsernameError] = useState('');
-    const [emailError, setEmailError] = useState('');
-    const [passwordError, setPasswordError] = useState('');
-    const [confirmPasswordError, setPasswordConfirmError] = useState('');
+    const [form] = Form.useForm();
     const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
     const [notifications, setNotifications] = useState([]);
-
 
     const addNotification = (message, description, type) => {
         const id = Date.now();
-        const newNotif = { id, message, description, type };
-        setNotifications((prev) => [...prev, newNotif]);
-
-
+        setNotifications((prev) => [...prev, { id, message, description, type }]);
     };
 
-
-    const handleSubmitButton = async () => {
+    const onFinish = async (values) => {
         try {
-            const res = await createUserApi(username, password, email);
-            if (res.data) {
-                addNotification("create user", "Tạo user thành công", "success");
-                setTimeout(() => {
-                    navigate('/login');
-                }, 2000);
+            setLoading(true);
+            const res = await registerUserApi(
+                values.fullName,
+                values.email,
+                values.password,
+                values.phone,
+                values.address
+            );
+            if (res?.data) {
+                addNotification("Đăng ký thành công", "Vui lòng đăng nhập để tiếp tục", "success");
+                setTimeout(() => navigate('/login'), 1500);
             } else {
-                addNotification("Error create user", JSON.stringify(res.error), "error");
+                addNotification("Đăng ký thất bại", res?.message || "Vui lòng thử lại", "error");
             }
-        } catch {
-            addNotification("Error", "Đã có lỗi xảy ra", "error");
-        }
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        let valid = true;
-
-        if (!username) {
-            setUsernameError('Vui lòng nhập tên người dùng!');
-            valid = false;
-        } else {
-            setUsernameError('');
-        }
-
-        if (!email) {
-            setEmailError('Vui lòng nhập email!');
-            valid = false;
-        } else {
-            setEmailError('');
-        }
-
-        if (!password) {
-            setPasswordError('Vui lòng nhập mật khẩu!');
-            valid = false;
-        } else {
-            setPasswordError('');
-        }
-
-        if (!confirmPassword) {
-            setPasswordConfirmError('Vui lòng xác nhận mật khẩu!');
-            valid = false;
-        } else if (confirmPassword !== password) {
-            setPasswordConfirmError('Mật khẩu xác nhận không khớp!');
-            valid = false;
-        } else {
-            setPasswordConfirmError('');
-        }
-
-        if (valid) {
-            handleSubmitButton();
+        } catch (error) {
+            const errorMessage = error?.response?.data?.message || "Đã có lỗi xảy ra";
+            addNotification("Đăng ký thất bại", errorMessage, "error");
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <div
-            className="w-screen h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center"
+            className="min-h-screen bg-cover bg-center flex items-center justify-center px-4 py-8"
             style={{ backgroundImage: `url('${bg}')` }}
         >
-            <div
-                className="w-[950px] h-[700px] rounded-2xl shadow-lg flex items-center justify-center"
-                style={{
-                    background: 'transparent',
-                    backdropFilter: 'blur(55px)',
-                }}
-            >
-                <div
-                    className="w-1/2 h-full px-10 py-8 flex flex-col justify-center rounded-l-2xl"
-                    style={{ padding: '40px' }}
-                >
-                    <h1 className="text-xl font-bold text-white text-center mb-6">Register</h1>
-
-                    {/* Username */}
-                    <div className="mb-0.5 relative">
-                        <label className="block mb-1 font-medium text-white">Tên người dùng</label>
-                        <Input
-                            size="large"
-                            prefix={<UserOutlined className="text-gray-400" />}
-                            placeholder="Nhập tên người dùng"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            status={usernameError ? 'error' : ''}
-                        />
-                        <p className="mt-1 text-red-500 text-sm min-h-[1.25rem]" >
-                            {usernameError || '\u00A0'}
-                        </p>
+            <Row className="w-full max-w-5xl bg-white/90 rounded-2xl shadow-2xl overflow-hidden">
+                <Col xs={24} md={12} className="bg-white p-8">
+                    <div className="mb-6 text-center">
+                        <Title level={2} style={{ marginBottom: 0 }}>Tạo tài khoản</Title>
+                        <Text type="secondary">Hoàn tất thông tin để trải nghiệm Feliciano</Text>
                     </div>
-
-                    {/* Email */}
-                    <div className="mb-0.5 relative">
-                        <label className="block mb-1 font-medium text-white">Email</label>
-                        <Input
-                            size="large"
-                            prefix={<MailOutlined className="text-gray-400" />}
-                            placeholder="Nhập email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            status={emailError ? 'error' : ''}
-                        />
-                        <p className="mt-1 text-red-500 text-sm min-h-[1.25rem] mb-0.5">
-                            {emailError || '\u00A0'}
-                        </p>
-                    </div>
-
-                    {/* Password */}
-                    <div className="mb-0.5 relative">
-                        <label className="block mb-1 font-medium text-white">Mật khẩu</label>
-                        <Input.Password
-                            size="large"
-                            prefix={<LockOutlined className="text-gray-400" />}
-                            placeholder="Nhập mật khẩu"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            status={passwordError ? 'error' : ''}
-                        />
-                        <p className="mt-1 text-red-500 text-sm min-h-[1.25rem] mb-0.5">
-                            {passwordError || '\u00A0'}
-                        </p>
-                    </div>
-
-                    {/* Confirm Password */}
-                    <div className="mb-0.5 relative">
-                        <label className="block mb-1 font-medium text-white">Xác nhận mật khẩu</label>
-                        <Input.Password
-                            size="large"
-                            prefix={<LockOutlined className="text-gray-400" />}
-                            placeholder="Nhập lại mật khẩu"
-                            value={confirmPassword}
-                            onChange={(e) => setPasswordConfirm(e.target.value)}
-                            status={confirmPasswordError ? 'error' : ''}
-                        />
-                        <p className="mt-1 text-red-500 text-sm min-h-[1.25rem] mb-0.5">
-                            {confirmPasswordError || '\u00A0'}
-                        </p>
-                    </div>
-
-                    <Button
-                        type="primary"
-                        size="large"
-                        className="btn mt-2"
-                        onClick={handleSubmit}
+                    <Form
+                        layout="vertical"
+                        form={form}
+                        onFinish={onFinish}
+                        requiredMark={false}
                     >
-                        Đăng ký
-                    </Button>
+                        <Form.Item
+                            name="fullName"
+                            label="Họ và tên"
+                            rules={[{ required: true, message: "Vui lòng nhập họ tên" }]}
+                        >
+                            <Input size="large" prefix={<UserOutlined />} placeholder="Nguyễn Văn A" />
+                        </Form.Item>
 
-                    <div className="text-center text-sm text-white mt-3">
-                        <p>
-                            Đã có tài khoản?{' '}
-                            <Link to="/login" className="primary-color font-medium hover:underline text-white">
-                                Đăng nhập ngay
-                            </Link>
-                        </p>
-                    </div>
-                </div>
+                        <Form.Item
+                            name="email"
+                            label="Email"
+                            rules={[
+                                { required: true, message: "Vui lòng nhập email" },
+                                { type: "email", message: "Email không hợp lệ" }
+                            ]}
+                        >
+                            <Input size="large" prefix={<MailOutlined />} placeholder="email@example.com" />
+                        </Form.Item>
 
-                {/* Cột phải giữ nguyên */}
-                <div
-                    className="w-1/2 h-full flex flex-col justify-center items-center"
-                    style={{
-                        background: 'white',
-                        clipPath: 'polygon(5% 0, 100% 0, 100% 100%, 40% 100%)',
-                        borderRadius: '20px',
-                    }}
-                >
-                    <p className="text-[80px] text-[#C8A97E] font-primary leading-none mb-0" style={{ paddingLeft: '70px' }}>
-                        Feliciano
-                    </p>
-                    <div className="w-full" style={{ paddingRight: '60px' }}>
-                        <p className="text-black text-md text-end" style={{ fontSize: '26px', fontStyle: 'italic', fontWeight: '300', marginTop: '10px', marginBottom: '0' }}>
-                            Restaurant
-                        </p>
-                    </div>
-                    <div className="w-full" style={{ paddingRight: '60px', fontStyle: 'italic' }}>
-                        <p className="text-black text-end" style={{ fontSize: '22px', fontStyle: 'italic', fontWeight: '300', marginTop: '10px', marginBottom: '0' }}>
-                            Best choice for you!
-                        </p>
-                    </div>
-                </div>
-            </div>
+                        <Row gutter={16}>
+                            <Col span={12}>
+                                <Form.Item
+                                    name="password"
+                                    label="Mật khẩu"
+                                    rules={[
+                                        { required: true, message: "Nhập mật khẩu" },
+                                        { min: 6, message: "Mật khẩu tối thiểu 6 ký tự" }
+                                    ]}
+                                >
+                                    <Input.Password size="large" prefix={<LockOutlined />} />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item
+                                    name="confirmPassword"
+                                    label="Xác nhận mật khẩu"
+                                    dependencies={['password']}
+                                    rules={[
+                                        { required: true, message: "Nhập lại mật khẩu" },
+                                        ({ getFieldValue }) => ({
+                                            validator(_, value) {
+                                                if (!value || getFieldValue('password') === value) {
+                                                    return Promise.resolve();
+                                                }
+                                                return Promise.reject(new Error('Mật khẩu xác nhận không khớp'));
+                                            },
+                                        }),
+                                    ]}
+                                >
+                                    <Input.Password size="large" prefix={<LockOutlined />} />
+                                </Form.Item>
+                            </Col>
+                        </Row>
 
-            {/* Hiển thị thông báo */}
+                        <Form.Item
+                            name="phone"
+                            label="Số điện thoại"
+                            rules={[
+                                { required: true, message: "Nhập số điện thoại" },
+                                { pattern: /^\d{10,11}$/, message: "Số điện thoại không hợp lệ" }
+                            ]}
+                        >
+                            <Input size="large" prefix={<PhoneOutlined />} placeholder="0123456789" />
+                        </Form.Item>
+
+                        <Form.Item
+                            name="address"
+                            label="Địa chỉ"
+                            rules={[{ required: true, message: "Vui lòng chọn địa chỉ" }]}
+                        >
+                            <AddressSelector
+                                value={form.getFieldValue("address")}
+                                onChange={(value) => form.setFieldsValue({ address: value })}
+                            />
+                        </Form.Item>
+
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            size="large"
+                            block
+                            loading={loading}
+                        >
+                            Đăng ký
+                        </Button>
+
+                        <div className="text-center mt-4">
+                            <Text>Đã có tài khoản? </Text>
+                            <Link to="/login">Đăng nhập ngay</Link>
+                        </div>
+                    </Form>
+                </Col>
+                <Col xs={24} md={12} className="bg-[#0f172a] text-white p-10 flex flex-col justify-between">
+                    <div>
+                        <p className="text-5xl font-[Great_Vibes,cursive] text-[#C8A97E] mb-2">Feliciano</p>
+                        <p className="text-xl italic">Best choice for your dining experience</p>
+                    </div>
+                    <div className="space-y-4">
+                        <p>✔️ Đặt bàn nhanh chóng</p>
+                        <p>✔️ Theo dõi đơn hàng của bạn</p>
+                        <p>✔️ Nhận ưu đãi độc quyền</p>
+                    </div>
+                </Col>
+            </Row>
+
             <div className="fixed top-4 right-4 z-[9999]">
                 {notifications.map((notif) => (
                     <Notification
                         key={notif.id}
-                        message={notif.error}
+                        message={notif.message}
                         description={notif.description}
                         type={notif.type}
-                        onClose={() => {
-                            setNotifications((prev) =>
-                                prev.filter((item) => item.id !== notif.id)
-                            );
-                        }}
+                        onClose={() => setNotifications((prev) => prev.filter((item) => item.id !== notif.id))}
                     />
                 ))}
             </div>

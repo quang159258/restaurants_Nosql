@@ -8,28 +8,31 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.controller.WebSocketController;
 import restaurant.example.restaurant.domain.Category;
 import restaurant.example.restaurant.domain.Dish;
 import restaurant.example.restaurant.domain.User;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
 import restaurant.example.restaurant.repository.CategoryRepository;
 import restaurant.example.restaurant.repository.DishRepository;
+import restaurant.example.restaurant.service.notification.NotificationAudience;
+import restaurant.example.restaurant.service.notification.NotificationMessage;
+import restaurant.example.restaurant.service.notification.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class DishService {
     private final DishRepository dishRepository;
     private final CategoryRepository categoryRepository;
-    private final WebSocketController webSocketController;
+    private final NotificationService notificationService;
     
     @Autowired
     private CacheService cacheService;
 
-    public DishService(DishRepository dishRepository, CategoryRepository categoryRepository, WebSocketController webSocketController) {
+    public DishService(DishRepository dishRepository, CategoryRepository categoryRepository,
+            NotificationService notificationService) {
         this.dishRepository = dishRepository;
         this.categoryRepository = categoryRepository;
-        this.webSocketController = webSocketController;
+        this.notificationService = notificationService;
     }
 
     public Dish handleCreatedDish(Dish dish) {
@@ -61,11 +64,13 @@ public class DishService {
      */
     private void checkLowStockAndNotify(Dish dish) {
         if (dish.getStock() != null && dish.getStock() <= 10) {
-            try {
-                webSocketController.sendLowStockNotification(dish.getName(), dish.getStock());
-            } catch (Exception e) {
-                System.err.println("Lỗi khi gửi thông báo tồn kho thấp: " + e.getMessage());
-            }
+            notificationService.enqueue(NotificationMessage.builder()
+                    .audience(NotificationAudience.SUPER_ADMIN)
+                    .put("type", "low_stock")
+                    .put("dishName", dish.getName())
+                    .put("currentStock", dish.getStock())
+                    .put("message", "Tồn kho thấp: " + dish.getName())
+                    .build());
         }
     }
 

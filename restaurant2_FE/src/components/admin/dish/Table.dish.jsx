@@ -1,17 +1,52 @@
 import React, { useEffect, useState } from "react";
-import { Space, Table, Image, Modal, Form, Input, Button, Select, Upload, message, Popconfirm, InputNumber } from "antd";
-import { fetchAllDish, fetchAllCategories, handleUploadFile, updateDish, deleteDish, fetchAllDishByName, getImageUrl, getImageUrlFromFileName } from "../../../services/api.service";
-import { DeleteOutlined, EditOutlined, UploadOutlined } from "@ant-design/icons";
+import {
+    Space,
+    Table,
+    Image,
+    Modal,
+    Form,
+    Input,
+    Button,
+    Select,
+    message,
+    InputNumber,
+    Tag,
+    Tooltip,
+    Card,
+    Typography,
+    Divider,
+    Empty,
+    Upload,
+} from "antd";
+import {
+    fetchAllDish,
+    fetchAllCategories,
+    handleUploadFile,
+    updateDish,
+    deleteDish,
+    fetchAllDishByName,
+    getImageUrlFromFileName,
+    updateStock,
+} from "../../../services/api.service";
+import {
+    DeleteOutlined,
+    EditOutlined,
+    PlusOutlined,
+    SearchOutlined,
+    ReloadOutlined,
+    DatabaseOutlined,
+    UploadOutlined,
+} from "@ant-design/icons";
 import Notification from "../../noti/Notification";
 import AddDish from "./Add.dish";
+import foodPlaceholder from "../../../assets/img/food-1.webp";
 
 const TableDish = () => {
     const [categories, setCategories] = useState([]);
     const [dishes, setDishes] = useState([]);
-    const [type, setType] = useState(1);
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
-    const [size, setSize] = useState(4);
+    const [size, setSize] = useState(8);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedDish, setSelectedDish] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
@@ -31,30 +66,24 @@ const TableDish = () => {
         const id = Date.now();
         const newNotif = { id, message, description, type };
         setNotifications((prev) => [...prev, newNotif]);
-
-
     };
     // Hàm lấy dữ liệu món ăn
 
-    const getDishes = async (page, size, type) => {
+    const getDishes = async (pageIndex, pageSize) => {
         try {
-            const res = await fetchAllDish(page, size, type);
-            if (res.data && res.data.result) {
-                debugger
-                // const enrichedDishes = await Promise.all(
-                //     res.data.result.map(async (item) => {
-                //         const imageUrl = await getImageUrl(item.imageUrl); // gọi API từ file service
-                //         return {
-                //             ...item,
-                //             key: item.id.toString(),
-                //             imageUrl,
-                //         };
-                //     })
-                // );
-
-                setDishes(res.data.result);
-                setPage(res.data.meta.page);
-                setTotal(res.data.meta.total);
+            const res = await fetchAllDish(pageIndex, pageSize, 1);
+            const data = res?.data ?? res;
+            if (data?.result) {
+                setDishes(
+                    data.result.map((item) => ({
+                        ...item,
+                        key: item.id,
+                    }))
+                );
+                setPage(data.meta.page);
+                setTotal(data.meta.total);
+            } else if (Array.isArray(data)) {
+                setDishes(data.map((item) => ({ ...item, key: item.id })));
             }
         } catch (error) {
             console.error("Lỗi khi lấy danh sách món ăn:", error);
@@ -66,20 +95,26 @@ const TableDish = () => {
         const getCategories = async () => {
             try {
                 const res = await fetchAllCategories();
-                if (res.data) {
-                    setCategories(res.data);
+                const data = res?.data ?? res;
+                if (Array.isArray(data)) {
+                    setCategories(data);
+                } else if (data?.data && Array.isArray(data.data)) {
+                    setCategories(data.data);
+                } else {
+                    setCategories([]);
                 }
             } catch (error) {
                 console.error("Lỗi khi lấy danh sách danh mục:", error);
+                setCategories([]);
             }
         };
         getCategories();
     }, []);
 
-    // Lấy danh sách món ăn khi page, size hoặc type thay đổi
+    // Lấy danh sách món ăn khi page, size thay đổi
     useEffect(() => {
-        getDishes(page, size, type);
-    }, [page, size, type]);
+        getDishes(page, size);
+    }, [page, size]);
 
     // const reload = () => {
     //     getDishes(page, size, type);
@@ -95,27 +130,25 @@ const TableDish = () => {
             price: record.price,
             categoryId: record.category.id,
             stock: record.stock || 0,
+            imageUrl: record.imageUrl,
         });
         setIsModalOpen(true);
     };
 
     // Hàm xử lý khi bấm "Xóa"
     const handleDelete = async (record) => {
-        console.log("Xóa món:", record);
         const res = await deleteDish(record.id);
-        if (res.data) {
-            addNotification("Delete user", "Xóa  món ăn thành công", "success");
-
+        const data = res?.data ?? res;
+        if (data) {
+            addNotification("Xóa món ăn", `Đã xóa món "${record.name}" thành công`, "success");
+            getDishes(page, size);
         } else {
-            addNotification("Error delete", "Xóa   món ăn thất bại", "error");
-
+            addNotification("Xóa món ăn", "Xóa món ăn thất bại", "error");
         }
-        getDishes(page, size, type);
     };
 
     // Hàm xử lý khi bấm "Nhập kho"
     const handleStockUpdate = (record) => {
-        console.log("Stock update clicked for dish:", record);
         setSelectedDishForStock(record);
         stockForm.setFieldsValue({
             stock: record.stock || 0
@@ -125,43 +158,57 @@ const TableDish = () => {
 
     // Hàm xử lý cập nhật tồn kho
     const handleStockSubmit = async (values) => {
+        if (!selectedDishForStock) return;
         try {
-            console.log("Stock update values:", values);
-            console.log("Selected dish for stock:", selectedDishForStock);
-            
-            const updateData = {
-                ...selectedDishForStock,
-                stock: values.stock
-            };
-            
-            console.log("Stock update data:", updateData);
-            
-            await updateDish(updateData);
-            addNotification("Cập nhật tồn kho thành công", `Đã cập nhật tồn kho món "${selectedDishForStock.name}" thành ${values.stock}`, "success");
-            setIsStockModalOpen(false);
-            stockForm.resetFields();
-            getDishes(page, size, type);
+            const response = await updateStock(selectedDishForStock.id, { stock: values.stock });
+            const result = response?.data ?? response;
+            if (result?.success) {
+                addNotification(
+                    "Cập nhật tồn kho",
+                    result.message || `Đã cập nhật tồn kho món "${selectedDishForStock.name}" thành ${values.stock}`,
+                    "success"
+                );
+                setIsStockModalOpen(false);
+                stockForm.resetFields();
+                getDishes(page, size);
+            } else {
+                throw new Error(result?.message || "Cập nhật tồn kho không thành công");
+            }
         } catch (error) {
             console.error("Error updating stock:", error);
-            addNotification("Lỗi khi cập nhật tồn kho", error.response?.data?.message || "Có lỗi xảy ra", "error");
+            const messageError =
+                error?.message ||
+                error?.response?.data?.message ||
+                "Có lỗi xảy ra khi cập nhật tồn kho";
+            addNotification("Lỗi khi cập nhật tồn kho", messageError, "error");
         }
     };
 
     // Hàm xử lý khi bấm "Cập nhật" thông tin món ăn
     const handleUpdate = async (values) => {
         try {
-            console.log("Cập nhật món ăn:", { ...values });
-            const res = await updateDish(values);
-            if (res.data) {
-                addNotification("Update user", "Cập nhật   món ăn thành công", "success");
+            const payload = {
+                id: values.id,
+                name: values.name,
+                description: values.description,
+                price: values.price,
+                stock: values.stock,
+                imageUrl: values.imageUrl || selectedDish?.imageUrl || "",
+                category: {
+                    id: values.categoryId,
+                },
+            };
+            const res = await updateDish(payload);
+            const data = res?.data ?? res;
+            if (data) {
+                addNotification("Cập nhật món ăn", `Đã cập nhật món "${values.name}" thành công`, "success");
+                setIsModalOpen(false);
+                setPreviewImage(null);
+                form.resetFields();
+                getDishes(page, size); // Làm mới danh sách món ăn
             } else {
-                addNotification("Error update", "Cập nhật   món ăn thất bại", "error");
-
+                addNotification("Cập nhật món ăn", "Cập nhật món ăn thất bại", "error");
             }
-            setIsModalOpen(false);
-            setPreviewImage(null);
-            form.resetFields();
-            getDishes(page, size, type); // Làm mới danh sách món ăn
         } catch (error) {
             console.error("Lỗi khi cập nhật món ăn:", error);
             message.error("Cập nhật món ăn thất bại!");
@@ -170,51 +217,22 @@ const TableDish = () => {
 
     // Hàm xử lý khi chọn và upload hình ảnh
     const handleImageUpload = async (file) => {
-        debugger
-        // Tạo URL tạm thời để hiển thị ảnh xem trước
-        const reader = new FileReader();
-        reader.onload = () => {
-            setPreviewImage(reader.result);
-        };
-        reader.readAsDataURL(file);
-
-        debugger
         try {
+            const reader = new FileReader();
+            reader.onload = () => setPreviewImage(reader.result);
+            reader.readAsDataURL(file);
+
             const uploadResponse = await handleUploadFile(file);
-            console.log("Lỗi upload ảnh:", uploadResponse);
-
-            const fileName = uploadResponse.data;
-            const imageUrl = await getImageUrl(fileName);
-            form.setFieldsValue({ image: fileName });
-            // Bước 2: Lấy dữ liệu từ form và cập nhật món ăn
-            const formValues = form.getFieldsValue();
-            const dishData = {
-                id: selectedDish.id,
-                name: formValues.name,
-                description: formValues.description,
-                price: formValues.price,
-                imageUrl: imageUrl, // Sử dụng fileName từ API upload
-                categoryId: formValues.categoryId,
-            };
-
-            // Gọi API cập nhật món ăn
-            console.log("Cập nhật món ăn:", dishData);
-            const updateResponse = await updateDish(dishData); // Giả sử bạn có hàm updateDish để gọi API PUT /dish
-            if (updateResponse.data) {
-                addNotification("Update image", "Cập nhật hình ảnh món ăn thành công", "success");
+            const fileName = uploadResponse?.data ?? uploadResponse;
+            if (!fileName) {
+                throw new Error("Không lấy được tên file sau khi upload");
             }
-            // message.success("Cập nhật hình ảnh và thông tin món ăn thành công!");
-            setIsModalOpen(false); // Đóng modal
-            setPreviewImage(null); // Reset ảnh xem trước
-            form.resetFields(); // Reset form
-            getDishes(page, size, type); // Làm mới danh sách món ăn
-
+            form.setFieldsValue({ imageUrl: fileName });
+            addNotification("Upload ảnh", "Tải ảnh món ăn thành công", "success");
         } catch (error) {
             console.error("Lỗi upload ảnh:", error);
             message.error("Upload ảnh thất bại!");
         }
-
-
     };
 
     // Hàm đóng modal
@@ -226,58 +244,78 @@ const TableDish = () => {
 
 
     // search 
-    const handleSearch = async (e) => {
-        console.log(e.target.value);
-        const name = e.target.value;
-        const res = await fetchAllDishByName(page, size, name);
-        if (res.data && res.data.result) {
-            const dishesWithKey = res.data.result.map((item) => ({
-                ...item,
-                key: item.id.toString(),
-            }));
-            console.log(dishesWithKey);
-
-            setDishes(dishesWithKey);
-            setPage(res.data.meta.page);
-            setTotal(res.data.meta.total);
+    const handleSearch = async (value) => {
+        const keyword = value.trim();
+        if (!keyword) {
+            getDishes(1, size);
+            setPage(1);
+            return;
         }
-    }
+
+        try {
+            const res = await fetchAllDishByName(1, size, keyword);
+            const data = res?.data ?? res;
+            if (data?.result) {
+                setDishes(data.result.map((item) => ({ ...item, key: item.id })));
+                setPage(data.meta.page);
+                setTotal(data.meta.total);
+            } else {
+                setDishes([]);
+                setTotal(0);
+            }
+        } catch (error) {
+            console.error("Lỗi khi tìm kiếm món ăn:", error);
+            message.error("Không thể tìm kiếm món ăn");
+        }
+    };
+
     const columns = [
         {
             title: "Ảnh",
             dataIndex: "imageUrl",
             key: "imageUrl",
             render: (url) => (
-                <Image width={70} height={90} src={getImageUrlFromFileName(url)} alt="dish" />
+                <Image
+                    width={72}
+                    height={72}
+                    preview={false}
+                    style={{ objectFit: "cover", borderRadius: 8, boxShadow: "0 8px 20px rgba(0,0,0,0.08)" }}
+                    src={getImageUrlFromFileName(url)}
+                    alt="dish"
+                    fallback={foodPlaceholder}
+                />
             ),
         },
         {
             title: "Tên món",
             dataIndex: "name",
             key: "name",
+            render: (text) => <Typography.Text strong>{text}</Typography.Text>,
         },
         {
             title: "Mô tả",
             dataIndex: "description",
             key: "description",
+            ellipsis: true,
         },
         {
             title: "Giá",
             dataIndex: "price",
             key: "price",
-            render: (price) => `${price.toLocaleString()} đ`,
+            render: (price) => (
+                <Typography.Text style={{ color: "#C8A97E", fontWeight: 600 }}>
+                    {price.toLocaleString("vi-VN")} đ
+                </Typography.Text>
+            ),
         },
         {
             title: "Tồn kho",
             dataIndex: "stock",
             key: "stock",
             render: (stock) => (
-                <span style={{ 
-                    color: stock > 10 ? '#52c41a' : stock > 0 ? '#faad14' : '#ff4d4f',
-                    fontWeight: 'bold'
-                }}>
+                <Tag color={stock > 10 ? "green" : stock > 0 ? "orange" : "red"} style={{ fontSize: 14, padding: "4px 12px" }}>
                     {stock || 0}
-                </span>
+                </Tag>
             ),
         },
         {
@@ -285,24 +323,25 @@ const TableDish = () => {
             dataIndex: "category",
             key: "category",
             render: (cat) => (
-                <div>
-                    <p>{cat.name}</p>
-                </div>
+                <Tag color="geekblue" style={{ textTransform: "capitalize" }}>
+                    {cat?.name || "N/A"}
+                </Tag>
             ),
         },
         {
             title: "Nhập kho",
             key: "stockUpdate",
             render: (_, record) => (
-                <Space size="small">
-                    <Button 
-                        type="primary" 
-                        size="small"
+                <Tooltip title="Nhập thêm hàng">
+                    <Button
+                        type="primary"
+                        shape="round"
+                        icon={<DatabaseOutlined />}
                         onClick={() => handleStockUpdate(record)}
                     >
                         Nhập kho
                     </Button>
-                </Space>
+                </Tooltip>
             ),
         },
         {
@@ -310,64 +349,101 @@ const TableDish = () => {
             key: "action",
             render: (_, record) => (
                 <Space size="middle">
-                    <a onClick={() => handleEdit(record)}>
-                        <EditOutlined style={{ color: "#1890ff" }} />
-                    </a>
-                    <a onClick={() => handleDelete(record)}>
-                        <DeleteOutlined style={{ color: "red" }} />
-                    </a>
-
+                    <Tooltip title="Chỉnh sửa">
+                        <Button
+                            type="text"
+                            icon={<EditOutlined style={{ color: "#1d4ed8" }} />}
+                            onClick={() => handleEdit(record)}
+                        />
+                    </Tooltip>
+                    <Tooltip title="Xóa món ăn">
+                        <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleDelete(record)}
+                        />
+                    </Tooltip>
                 </Space>
             ),
         },
     ];
 
-    const filteredCategories = categories.filter(cat => cat.name.toLowerCase() !== "all");
-
+    const filteredCategories = categories.filter((cat) => cat.name?.toLowerCase() !== "all");
 
     return (
         <>
-            <div
-                className="header flex py-3 p-4 justify-between"
+            <Card
+                className="mb-4 shadow-lg"
+                bodyStyle={{ padding: "18px 24px" }}
                 style={{
-                    backgroundColor: "rgba(112, 139, 200, 0.18)",
+                    borderRadius: 16,
+                    background: "linear-gradient(135deg, #f5f7ff 0%, #ffffff 100%)",
+                    border: "1px solid #e5e7ff",
                 }}
             >
-                <div>
-                    <p
-                        style={{
-                            color: "#C8A97E",
-                            fontSize: "32px",
-                            margin: "0",
-                        }}
+                <Space
+                    className="w-full"
+                    direction="vertical"
+                    size="middle"
+                    style={{ width: "100%" }}
+                >
+                    <Space
+                        align="center"
+                        className="w-full"
+                        style={{ justifyContent: "space-between" }}
                     >
-                        List Dish
-                    </p>
-                </div>
-                <div>
-                    <input
-                        onChange={(e) => { handleSearch(e) }}
-                        className="px-2 border rounded text-black bg-white"
-                        type="text"
-                        placeholder="search"
-                        style={{
-                            border: "1px solid #C8A97E",
-                        }}
+                        <div>
+                            <Typography.Title level={3} style={{ marginBottom: 4, color: "#1f2937" }}>
+                                Quản lý món ăn
+                            </Typography.Title>
+                            <Typography.Text style={{ color: "#6b7280" }}>
+                                Quản lý danh sách món ăn, hình ảnh, tồn kho và danh mục
+                            </Typography.Text>
+                        </div>
+                        <Space>
+                            <Input.Search
+                                placeholder="Tìm kiếm món ăn..."
+                                allowClear
+                                enterButton={<Button icon={<SearchOutlined />}>Tìm kiếm</Button>}
+                                size="large"
+                                onSearch={handleSearch}
+                                style={{ width: 320 }}
+                            />
+                            <Button
+                                type="default"
+                                size="large"
+                                icon={<ReloadOutlined />}
+                                onClick={() => {
+                                    setPage(1);
+                                    getDishes(1, size);
+                                }}
+                            >
+                                Làm mới
+                            </Button>
+                            <Button
+                                type="primary"
+                                size="large"
+                                icon={<PlusOutlined />}
+                                onClick={() => setCreate(true)}
+                                style={{ background: "#C8A97E", borderColor: "#C8A97E" }}
+                            >
+                                Thêm món
+                            </Button>
+                        </Space>
+                    </Space>
+                    <Divider style={{ margin: "12px 0" }} />
+                    <Space size={[8, 8]} wrap>
+                        <Tag color="processing">
+                            Tổng danh mục: <strong>{filteredCategories.length}</strong>
+                        </Tag>
+                        <Tag color="purple">
+                            Tổng món ăn: <strong>{total}</strong>
+                        </Tag>
+                    </Space>
+                </Space>
+            </Card>
 
-                    />
-                    <button
-                        className="m-3 px-3 rounded text-white"
-                        style={{
-                            background: "#C8A97E",
-                        }}
-                        onClick={() => {
-                            setCreate(true)
-                        }}
-                    >
-                        add dish
-                    </button>
-                </div>
-            </div>
             <Table
                 columns={columns}
                 dataSource={dishes}
@@ -375,11 +451,25 @@ const TableDish = () => {
                     current: page,
                     pageSize: size,
                     total: total,
+                    showSizeChanger: true,
+                    showTotal: (total, range) =>
+                        `${range[0]}-${range[1]} của ${total} món ăn`,
                     onChange: (page, pageSize) => {
                         setPage(page);
                         setSize(pageSize);
                     },
                 }}
+                locale={{
+                    emptyText: (
+                        <Empty
+                            description="Chưa có món ăn nào"
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        />
+                    ),
+                }}
+                bordered
+                style={{ background: "#fff", borderRadius: 16 }}
+                scroll={{ x: 1024 }}
             />
             <Modal
                 open={isModalOpen}
@@ -413,6 +503,9 @@ const TableDish = () => {
                             layout="vertical"
                             onFinish={handleUpdate}
                         >
+                            <Form.Item name="imageUrl" hidden>
+                                <Input />
+                            </Form.Item>
                             <div className="row">
                                 {/* Tên món */}
                                 <div className="col-12">
@@ -455,9 +548,10 @@ const TableDish = () => {
                                             borderRadius: 4,
                                             border: '1px solid #d9d9d9',
                                         }}
-                                        defaultValue={form.getFieldValue('categoryId') || ''}
-                                        onChange={(e) => form.setFieldsValue({ categoryId: parseInt(e.target.value) })}
+                                        value={form.getFieldValue('categoryId') || ''}
+                                        onChange={(e) => form.setFieldsValue({ categoryId: parseInt(e.target.value) || undefined })}
                                     >
+                                        <option value="">Chọn danh mục</option>
                                         {filteredCategories.map((category) => (
                                             <option key={category.id} value={category.id}>
                                                 {category.name}
@@ -568,9 +662,17 @@ const TableDish = () => {
                     layout="vertical"
                     onFinish={handleStockSubmit}
                 >
+                    <Typography.Paragraph type="secondary">
+                        Món: <Typography.Text strong>{selectedDishForStock?.name}</Typography.Text>
+                    </Typography.Paragraph>
+                    <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+                        Tồn kho hiện tại:{" "}
+                        <Typography.Text strong>{selectedDishForStock?.stock ?? 0}</Typography.Text>
+                    </Typography.Paragraph>
+
                     <Form.Item
                         name="stock"
-                        label="Số lượng tồn kho"
+                        label="Số lượng tồn kho mới"
                         rules={[
                             { required: true, message: 'Vui lòng nhập số lượng tồn kho!' },
                             { type: 'number', min: 0, message: 'Số lượng phải lớn hơn hoặc bằng 0!' }

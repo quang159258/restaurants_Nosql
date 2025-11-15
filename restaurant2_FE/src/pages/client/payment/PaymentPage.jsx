@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Card, Form, Input, Button, Select, message, Steps, Typography, Space, Divider } from 'antd';
-import { UserOutlined, PhoneOutlined, HomeOutlined, CreditCardOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, message, Steps, Typography, Space, Divider, Spin } from 'antd';
+import { UserOutlined, PhoneOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../../components/context/auth.context';
-import { checkOutCart, getCart } from '../../../services/api.service';
+import { checkOutCart, getCart, getAllDishInCart } from '../../../services/api.service';
 import Notification from '../../../components/noti/Notification';
+import AddressSelector from '../../../components/common/AddressSelector';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
-const { TextArea } = Input;
 
 const PaymentPage = () => {
     const { user, cart, setCart } = useContext(AuthContext);
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
-    const [orderInfo, setOrderInfo] = useState(null);
+    const [cartItems, setCartItems] = useState([]);
     const [notifications, setNotifications] = useState([]);
     const navigate = useNavigate();
     const location = useLocation();
@@ -27,13 +26,9 @@ const PaymentPage = () => {
     };
 
     useEffect(() => {
-        // Load thông tin từ location state nếu có (từ Confirm page)
         if (location.state?.formData) {
-            const { formData } = location.state;
-            form.setFieldsValue(formData);
-            setCurrentStep(1); // Skip to payment method step
+            form.setFieldsValue(location.state.formData);
         } else if (user && user.username) {
-            // Load thông tin user nếu có
             form.setFieldsValue({
                 receiverName: user.username,
                 receiverPhone: user.phone || '',
@@ -43,17 +38,32 @@ const PaymentPage = () => {
         }
     }, [user, form, location.state]);
 
+    useEffect(() => {
+        const loadCart = async () => {
+            try {
+                const summaryRes = await getCart();
+                const summaryData = summaryRes?.data ?? summaryRes;
+                if (summaryData) {
+                    setCart(summaryData);
+                }
+                const itemsRes = await getAllDishInCart();
+                const itemsData = itemsRes?.data ?? itemsRes;
+                setCartItems(Array.isArray(itemsData) ? itemsData : []);
+            } catch (error) {
+                console.error('Không thể tải giỏ hàng:', error);
+                setCartItems([]);
+            }
+        };
+        loadCart();
+    }, [setCart]);
+
     const steps = [
         {
             title: 'Thông tin nhận hàng',
             icon: <UserOutlined />,
         },
         {
-            title: 'Phương thức thanh toán',
-            icon: <CreditCardOutlined />,
-        },
-        {
-            title: 'Xác nhận đơn hàng',
+            title: 'Xác nhận & Thanh toán',
             icon: <CheckCircleOutlined />,
         },
     ];
@@ -67,8 +77,6 @@ const PaymentPage = () => {
                 .catch(() => {
                     message.error('Vui lòng điền đầy đủ thông tin nhận hàng');
                 });
-        } else if (currentStep === 1) {
-            setCurrentStep(2);
         }
     };
 
@@ -76,41 +84,51 @@ const PaymentPage = () => {
         setCurrentStep(currentStep - 1);
     };
 
-    const handlePayment = async (paymentMethod) => {
+    const handleCashPayment = async () => {
         try {
             setLoading(true);
             const values = await form.validateFields();
-            
-            const orderData = {
-                receiverName: values.receiverName,
-                receiverPhone: values.receiverPhone,
-                receiverAddress: values.receiverAddress,
-                receiverEmail: values.receiverEmail,
-                paymentMethod: paymentMethod
-            };
-
-            const res = await checkOutCart(
-                orderData.receiverName,
-                orderData.receiverPhone,
-                orderData.receiverAddress,
-                orderData.receiverEmail,
-                paymentMethod
+            const response = await checkOutCart(
+                values.receiverName,
+                values.receiverPhone,
+                values.receiverAddress,
+                values.receiverEmail,
+                'CASH'
             );
 
-            if (res.data) {
-                setOrderInfo(res.data);
-                
-                if (paymentMethod === 'VNPAY') {
-                    // Redirect to VNPAY
-                    window.location.href = res.data.paymentUrl;
-                } else {
-                    // COD - redirect to success page
-                    navigate('/thanks', { state: { orderId: res.data.id } });
+            const orderData = response?.data ?? response;
+
+            if (orderData?.orderId) {
+                addNotification(
+                    'Đặt hàng thành công',
+                    'Đơn hàng của bạn đã được ghi nhận. Nhân viên sẽ xác nhận thanh toán tiền mặt.',
+                    'success'
+                );
+
+                try {
+                    const summaryRes = await getCart();
+                    const summaryData = summaryRes?.data ?? summaryRes;
+                    if (summaryData) {
+                        setCart(summaryData);
+                    }
+                } catch (error) {
+                    console.error('Không thể cập nhật giỏ hàng sau khi thanh toán:', error);
                 }
+
+                setCartItems([]);
+                navigate('/thanks', {
+                    state: {
+                        orderId: orderData.orderId,
+                        orderStatus: orderData.status,
+                        paymentMethod: orderData.paymentMethod
+                    }
+                });
+            } else {
+                throw new Error('Thiếu thông tin đơn hàng trả về.');
             }
         } catch (error) {
             console.error('Payment error:', error);
-            addNotification('Lỗi thanh toán', 'Không thể xử lý thanh toán', 'error');
+            addNotification('Lỗi thanh toán', 'Không thể xử lý thanh toán tiền mặt', 'error');
         } finally {
             setLoading(false);
         }
@@ -157,11 +175,7 @@ const PaymentPage = () => {
                                 label="Địa chỉ nhận hàng"
                                 rules={[{ required: true, message: 'Vui lòng nhập địa chỉ!' }]}
                             >
-                                <TextArea 
-                                    prefix={<HomeOutlined />} 
-                                    placeholder="Nhập địa chỉ chi tiết" 
-                                    rows={3}
-                                />
+                                <AddressSelector />
                             </Form.Item>
                         </Form>
                     </Card>
@@ -169,74 +183,61 @@ const PaymentPage = () => {
 
             case 1:
                 return (
-                    <Card title="Phương thức thanh toán" className="mb-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Card 
-                                hoverable 
-                                className="text-center cursor-pointer border-2 border-blue-200"
-                                onClick={() => handlePayment('COD')}
-                            >
-                                <div className="p-4">
-                                    <div className="text-4xl mb-2">💰</div>
-                                    <Title level={4}>Thanh toán khi nhận hàng</Title>
-                                    <Text type="secondary">COD - Cash on Delivery</Text>
-                                </div>
-                            </Card>
-
-                            <Card 
-                                hoverable 
-                                className="text-center cursor-pointer border-2 border-green-200"
-                                onClick={() => handlePayment('VNPAY')}
-                            >
-                                <div className="p-4">
-                                    <div className="text-4xl mb-2">💳</div>
-                                    <Title level={4}>Thanh toán VNPAY</Title>
-                                    <Text type="secondary">Thẻ ATM, Visa, Mastercard</Text>
-                                </div>
-                            </Card>
-                        </div>
-                    </Card>
-                );
-
-            case 2:
-                return (
-                    <Card title="Xác nhận đơn hàng" className="mb-4">
-                        <div className="space-y-4">
-                            <div>
-                                <Title level={4}>Thông tin đơn hàng</Title>
-                                <div className="bg-gray-50 p-4 rounded">
-                                    <p><strong>Người nhận:</strong> {form.getFieldValue('receiverName')}</p>
-                                    <p><strong>SĐT:</strong> {form.getFieldValue('receiverPhone')}</p>
-                                    <p><strong>Email:</strong> {form.getFieldValue('receiverEmail')}</p>
-                                    <p><strong>Địa chỉ:</strong> {form.getFieldValue('receiverAddress')}</p>
-                                </div>
+                    <Card title="Xác nhận đơn hàng & thanh toán" className="mb-4">
+                        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                            <div className="bg-gray-50 p-4 rounded">
+                                <Title level={4}>Thông tin nhận hàng</Title>
+                                <p><strong>Người nhận:</strong> {form.getFieldValue('receiverName')}</p>
+                                <p><strong>SĐT:</strong> {form.getFieldValue('receiverPhone')}</p>
+                                <p><strong>Email:</strong> {form.getFieldValue('receiverEmail')}</p>
+                                <p><strong>Địa chỉ:</strong> {form.getFieldValue('receiverAddress')}</p>
                             </div>
 
                             <Divider />
 
                             <div>
-                                <Title level={4}>Giỏ hàng</Title>
-                                {cart.map((item, index) => (
-                                    <div key={index} className="flex justify-between items-center py-2 border-b">
-                                        <div>
-                                            <Text strong>{item.dishName}</Text>
-                                            <br />
-                                            <Text type="secondary">Số lượng: {item.quantity}</Text>
-                                        </div>
-                                        <Text strong>{item.price.toLocaleString()} VND</Text>
+                                <div className="flex items-center justify-between mb-2">
+                                    <Title level={4} style={{ margin: 0 }}>Giỏ hàng</Title>
+                                    {loading && <Spin size="small" />}
+                                </div>
+                                {cartItems.length === 0 ? (
+                                    <div className="text-center text-gray-500">
+                                        Không có sản phẩm trong giỏ hàng.
                                     </div>
-                                ))}
-                                
+                                ) : (
+                                    cartItems.map((item, index) => (
+                                        <div key={index} className="flex justify-between items-center py-2 border-b">
+                                            <div>
+                                                <Text strong>{item.name}</Text>
+                                                <br />
+                                                <Text type="secondary">Số lượng: {item.quantity}</Text>
+                                            </div>
+                                            <Text strong>{item.total?.toLocaleString('vi-VN')} VND</Text>
+                                        </div>
+                                    ))
+                                )}
                                 <Divider />
-                                
                                 <div className="flex justify-between items-center">
                                     <Title level={3}>Tổng cộng:</Title>
                                     <Title level={3} style={{ color: '#C8A97E' }}>
-                                        {cart.reduce((total, item) => total + (item.price * item.quantity), 0).toLocaleString()} VND
+                                        {(cart?.totalPrice || 0).toLocaleString('vi-VN')} VND
                                     </Title>
                                 </div>
                             </div>
-                        </div>
+
+                            <Button
+                                type="primary"
+                                size="large"
+                                loading={loading}
+                                onClick={handleCashPayment}
+                                block
+                            >
+                                Xác nhận thanh toán tiền mặt
+                            </Button>
+                            <Text type="secondary">
+                                Sau khi đặt hàng, nhân viên sẽ liên hệ để xác nhận và thu tiền mặt khi giao hàng.
+                            </Text>
+                        </Space>
                     </Card>
                 );
 
@@ -281,7 +282,7 @@ const PaymentPage = () => {
                                 Hủy
                             </Button>
                             
-                            {currentStep < 2 && (
+                            {currentStep < 1 && (
                                 <Button 
                                     type="primary" 
                                     onClick={handleNext}

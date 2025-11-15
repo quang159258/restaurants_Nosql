@@ -54,9 +54,10 @@ const SimplePayment = () => {
             }
         } catch (error) {
             console.error("Payment error:", error);
+            const serverMessage = error?.response?.data?.message || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.";
             addNotification(
                 "Lỗi thanh toán", 
-                "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.", 
+                serverMessage, 
                 "error"
             );
         } finally {

@@ -40,6 +40,8 @@ import LayoutStaff from './components/staff/LayoutStaff';
 import ThanksPage from './pages/client/thanks';
 import PaymentPage from './pages/client/payment';
 import PaymentManagement from './pages/admin/PaymentManagement';
+import AnalysisPage from './pages/admin/analysis';
+import PaymentResult from './pages/client/payment/VNPayCallback';
 
 
 const LayoutClient = () => {
@@ -103,11 +105,12 @@ const App = () => {
         { index: true, element: <IndexPage /> },
         { path: "dish", element: <TableDish /> },
         { path: "info", element: <InfoPageAdmin /> },
-        { path: "order", element: <OrderPageAdmin /> },
+        { path: "orders", element: <OrderPageAdmin /> },
         { path: "user", element: <UserPageAdmin /> },
         { path: "category", element: <TableCategory /> },
         { path: "role-permission", element: <RolePermissionManagement /> },
         { path: "payment", element: <PaymentManagement /> },
+        { path: "analysis", element: <AnalysisPage /> },
       ],
     },
 
@@ -131,6 +134,7 @@ const App = () => {
     },
 
     { path: "/thanks", element: <ThanksPage /> },
+    { path: "/payment-result", element: <PaymentResult /> },
 
     // Auth Pages
     { path: "/login", element: <LoginPage /> },

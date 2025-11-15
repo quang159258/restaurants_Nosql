@@ -1,5 +1,6 @@
 package restaurant.example.restaurant.repository;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
@@ -19,5 +20,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     public Boolean existsByEmail(String email);
 
     public User findByRefreshTokenAndEmail(String token, String email);
+
+    long countByCreatedAtBetween(Instant start, Instant end);
 
 }

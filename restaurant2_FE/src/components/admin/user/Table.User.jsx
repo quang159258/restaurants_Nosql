@@ -3,6 +3,7 @@ import { Table, Button, Modal, Input, Select, Tag, Space, Card, Typography } fro
 import { EditOutlined, UserOutlined, ReloadOutlined } from "@ant-design/icons";
 import Notification from "../../noti/Notification";
 import { fetchAllUser, fetchAllRoles, updateUserApi } from "../../../services/api.service";
+import AddressSelector from "../../common/AddressSelector";
 
 const { Option } = Select;
 
@@ -191,12 +192,7 @@ const UserTable = () => {
                             <Option value="MALE">Nam</Option>
                             <Option value="FEMALE">Nữ</Option>
                         </Select>
-                        <Input
-                            style={{ marginBottom: 10 }}
-                            value={address}
-                            onChange={(e) => setAddress(e.target.value)}
-                            placeholder="Địa chỉ"
-                        />
+                        <AddressSelector value={address} onChange={setAddress} />
                         <Select
                             style={{ width: "100%", marginBottom: 10 }}
                             value={userRole}

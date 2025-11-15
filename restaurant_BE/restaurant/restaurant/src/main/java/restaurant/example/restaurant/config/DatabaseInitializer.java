@@ -99,6 +99,15 @@ public class DatabaseInitializer implements CommandLineRunner {
             permissions.add(new Permission("Update order status", "/orders/status/{id}", "PUT", "ORDER"));
             permissions.add(new Permission("Delete order", "/orders/{id}", "DELETE", "ORDER"));
 
+            // PAYMENT
+            permissions.add(new Permission("Confirm cash payment", "/api/payment/cash/confirm/{orderId}", "POST", "PAYMENT"));
+            permissions.add(new Permission("Get order payment info", "/api/payment/order/{orderId}", "GET", "PAYMENT"));
+            permissions.add(new Permission("Create VNPay payment link", "/api/payment/vnpay/order/{orderId}", "POST", "PAYMENT"));
+            permissions.add(new Permission("Get VNPay config", "/api/payment/vnpay/config", "GET", "PAYMENT"));
+
+            // ANALYTICS
+            permissions.add(new Permission("Analytics overview", "/api/v1/analytics/overview", "GET", "ANALYTICS"));
+
             // INVENTORY MANAGEMENT
             permissions.add(new Permission("Get inventory stock", "/api/v1/inventory/stock/{dishId}", "GET", "INVENTORY"));
             permissions.add(new Permission("Update inventory stock", "/api/v1/inventory/stock/{dishId}", "PUT", "INVENTORY"));
@@ -126,7 +135,10 @@ public class DatabaseInitializer implements CommandLineRunner {
             List<Permission> userPermissions = allPermissions.stream()
                     .filter(p -> (p.getApiPath().equals("/orders/my") && p.getMethod().equals("GET")) ||
                             (p.getApiPath().equals("/orders/{id}") && p.getMethod().equals("GET")) ||
-                            (p.getApiPath().startsWith("/cart")))
+                            (p.getApiPath().startsWith("/cart")) ||
+                            (p.getApiPath().equals("/api/payment/order/{orderId}") && p.getMethod().equals("GET")) ||
+                            (p.getApiPath().equals("/api/payment/vnpay/order/{orderId}") && p.getMethod().equals("POST")) ||
+                            (p.getApiPath().equals("/api/payment/vnpay/config") && p.getMethod().equals("GET")))
                     .toList();
 
             Role userRole = new Role();
@@ -147,7 +159,10 @@ public class DatabaseInitializer implements CommandLineRunner {
                             (p.getApiPath().equals("/orders/status/{id}") && p.getMethod().equals("PUT")) ||
                             (p.getApiPath().startsWith("/api/v1/inventory/import") && p.getMethod().equals("POST")) ||
                             (p.getApiPath().startsWith("/api/v1/inventory/stock") && p.getMethod().equals("GET")) ||
-                            (p.getApiPath().startsWith("/dish") && p.getMethod().equals("GET")))
+                            (p.getApiPath().startsWith("/dish") && p.getMethod().equals("GET")) ||
+                            (p.getApiPath().equals("/api/payment/cash/confirm/{orderId}") && p.getMethod().equals("POST")) ||
+                            (p.getApiPath().equals("/api/payment/order/{orderId}") && p.getMethod().equals("GET")) ||
+                            (p.getApiPath().equals("/api/payment/vnpay/order/{orderId}") && p.getMethod().equals("POST")))
                     .toList();
 
             Role staffRole = new Role();

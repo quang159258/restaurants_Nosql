@@ -42,6 +42,7 @@ public class ResLoginDTO {
         private String address;
         private String gender;
         private String role;
+        private java.util.List<String> addressParts;
     }
 
     @Getter

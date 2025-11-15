@@ -1,6 +1,6 @@
 import { Button, Form, Input, Modal, message } from "antd";
 import { useEffect, useState } from "react";
-import { addDish, fetchAllCategories, handleUploadFile, updateDish } from "../../../services/api.service";
+import { addDish, fetchAllCategories, handleUploadFile } from "../../../services/api.service";
 import Notification from "../../noti/Notification";
 
 const AddDish = (props) => {
@@ -23,12 +23,12 @@ const AddDish = (props) => {
         const getCategories = async () => {
             try {
                 const res = await fetchAllCategories();
-                console.log("Categories response:", res.data);
-                if (res.data) {
-                    setCategories(res.data);
-                    console.log("Categories loaded:", res.data.length);
+                const data = res?.data ?? res;
+                if (Array.isArray(data)) {
+                    setCategories(data);
+                } else if (data?.data && Array.isArray(data.data)) {
+                    setCategories(data.data);
                 } else {
-                    console.log("No categories found");
                     setCategories([]);
                 }
             } catch (error) {
@@ -48,16 +48,13 @@ const AddDish = (props) => {
         };
         reader.readAsDataURL(file);
 
-        debugger
         try {
             const uploadResponse = await handleUploadFile(file);
-            console.log("Lỗi upload ảnh:", uploadResponse);
-
-            const fileName = uploadResponse.data;
-
+            const fileName = uploadResponse?.data ?? uploadResponse;
+            if (!fileName) {
+                throw new Error("Không lấy được tên file từ máy chủ");
+            }
             form.setFieldsValue({ image: fileName });
-
-
         } catch (error) {
             console.error("Lỗi upload ảnh:", error);
             message.error("Upload ảnh thất bại!");
@@ -72,6 +69,10 @@ const AddDish = (props) => {
             // Validate required fields
             if (!dishValue.categoryId) {
                 addNotification("Lỗi", "Vui lòng chọn danh mục", "error");
+                return;
+            }
+            if (!dishValue.image) {
+                addNotification("Lỗi", "Vui lòng tải lên ảnh món ăn", "error");
                 return;
             }
             
@@ -89,7 +90,8 @@ const AddDish = (props) => {
             const res = await addDish(dishData);
             console.log("Add dish response:", res);
             
-            if (res.data) {
+            const data = res?.data ?? res;
+            if (data) {
                 addNotification("Thành công", "Thêm món ăn thành công", "success");
                 form.resetFields();
                 setPreviewImage(null);
@@ -142,6 +144,9 @@ const AddDish = (props) => {
                             layout="vertical"
                             onFinish={handleSave}
                         >
+                            <Form.Item name="image" hidden>
+                                <Input />
+                            </Form.Item>
                             <div className="row">
 
 
@@ -239,23 +244,18 @@ const AddDish = (props) => {
 
                                 {/* Upload ảnh */}
                                 <div className="col-12">
-                                    <Form.Item
-                                        label={<span style={{ fontWeight: 600, fontSize: 18 }}>Ảnh món ăn</span>}
-                                        name="image"
-                                        valuePropName="file"
-                                        getValueFromEvent={(e) => e.target.files[0]}
-                                    >
-                                        <Input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files[0];
-                                                if (file) {
-                                                    handleImageUpload(file); // gọi hàm xử lý upload
-                                                }
-                                            }}
-                                        />
-                                    </Form.Item>
+                                    <span style={{ fontWeight: 600, fontSize: 18 }}>Ảnh món ăn</span>
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        style={{ marginTop: 8 }}
+                                        onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            if (file) {
+                                                handleImageUpload(file);
+                                            }
+                                        }}
+                                    />
                                 </div>
 
                                 {/* Nút cập nhật */}

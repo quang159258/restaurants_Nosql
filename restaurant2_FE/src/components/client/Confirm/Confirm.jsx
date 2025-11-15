@@ -1,19 +1,13 @@
 import { useContext, useEffect, useState } from "react";
-import axios from "axios";
+import { Radio } from "antd";
 import bg3 from "../../../assets/img/bg_3.jpg.webp";
 import food1 from "../../../assets/img/food-1.webp";
 import { AuthContext } from "../../context/auth.context";
-import { checkOutCart, getAllDishInCart, getCart } from "../../../services/api.service";
+import { getAllDishInCart, getCart, getVnpayConfig } from "../../../services/api.service";
 import Notification from "../../noti/Notification";
 import { useNavigate } from "react-router-dom";
-
+import AddressSelector from "../../common/AddressSelector";
 const ConfirmPage = () => {
-    const [cityData, setCityData] = useState([]);
-    const [cityId, setCityId] = useState("");
-    const [districtId, setDistrictId] = useState("");
-    const [wardId, setWardId] = useState("");
-    const [districts, setDistricts] = useState([]);
-    const [wards, setWards] = useState([]);
     const { user, cart, setCart } = useContext(AuthContext);
     const [listItemCart, setListItemCart] = useState([]);
     const navigate = useNavigate();
@@ -22,9 +16,9 @@ const ConfirmPage = () => {
     const [phone, setPhone] = useState(user.phone);
     const [email, setEmail] = useState(user.email);
     const [notifications, setNotifications] = useState([]);
-
-    // ✅ NEW: state lưu phương thức thanh toán
+    const [addressValue, setAddressValue] = useState(user.address || "");
     const [paymentMethod, setPaymentMethod] = useState("CASH");
+    const [vnpayAvailable, setVnpayAvailable] = useState(true);
 
     const addNotification = (message, description, type) => {
         const id = Date.now();
@@ -33,29 +27,23 @@ const ConfirmPage = () => {
     };
 
 
-    // Lấy danh sách tỉnh thành VN
     useEffect(() => {
-        axios
-            .get(
-                "https://raw.githubusercontent.com/kenzouno1/DiaGioiHanhChinhVN/master/data.json"
-            )
-            .then((res) => {
-                setCityData(res.data);
-            });
+        setAddressValue(user.address || "");
+    }, [user.address]);
+
+    useEffect(() => {
+        const fetchVnpay = async () => {
+            try {
+                const res = await getVnpayConfig();
+                if (typeof res?.data?.enabled === "boolean") {
+                    setVnpayAvailable(res.data.enabled);
+                }
+            } catch {
+                // If API call fails we keep VNPay enabled so checkout can still proceed.
+            }
+        };
+        fetchVnpay();
     }, []);
-
-    useEffect(() => {
-        const selectedCity = cityData.find((c) => c.Id === cityId);
-        setDistricts(selectedCity ? selectedCity.Districts : []);
-        setDistrictId("");
-        setWardId("");
-    }, [cityId, cityData]);
-
-    useEffect(() => {
-        const selectedDistrict = districts.find((d) => d.Id === districtId);
-        setWards(selectedDistrict ? selectedDistrict.Wards : []);
-        setWardId("");
-    }, [districtId, districts]);
 
     // Lấy giỏ hàng
     const fetchCart = async () => {
@@ -75,26 +63,24 @@ const ConfirmPage = () => {
 
     // Xử lý checkout
     const handleCheckOut = async () => {
-        const getSelectedAddress = () => {
-            const city = cityData.find((c) => c.Id === cityId)?.Name || "";
-            const district = districts.find((d) => d.Id === districtId)?.Name || "";
-            const ward = wards.find((w) => w.Id === wardId)?.Name || "";
-            return `${ward}, ${district}, ${city}`;
-        };
-
-        const address = getSelectedAddress();
-
-        // Redirect to payment page with form data
-        navigate("/payment", { 
-            state: { 
+        if (!addressValue) {
+            addNotification("Thiếu địa chỉ", "Vui lòng chọn đầy đủ địa chỉ giao hàng", "warning");
+            return;
+        }
+        if (paymentMethod === "VNPAY" && !vnpayAvailable) {
+            addNotification("VNPay không khả dụng", "Vui lòng chọn phương thức thanh toán khác", "warning");
+            return;
+        }
+        navigate("/payment", {
+            state: {
                 formData: {
                     receiverName: name,
                     receiverPhone: phone,
-                    receiverAddress: address,
+                    receiverAddress: addressValue,
                     receiverEmail: email,
-                    paymentMethod: paymentMethod
+                    paymentMethod
                 }
-            } 
+            }
         });
     };
 
@@ -137,65 +123,22 @@ const ConfirmPage = () => {
                             className="w-full border-b border-gray-300 focus:outline-none mb-4 px-2"
                         />
 
-                        {/* Chọn tỉnh/thành */}
-                        <select
-                            required
-                            className="w-full border-b border-gray-300 mb-4  py-2 px-2"
-                            value={cityId}
-                            onChange={(e) => setCityId(e.target.value)}
-                        >
-                            <option value="">Chọn tỉnh thành</option>
-                            {cityData.map((c) => (
-                                <option key={c.Id} value={c.Id}>
-                                    {c.Name}
-                                </option>
-                            ))}
-                        </select>
+                        <AddressSelector value={addressValue} onChange={setAddressValue} />
 
-                        {/* Chọn quận/huyện */}
-                        <select
-                            required
-                            className="w-full border-b border-gray-300 mb-4  py-2 px-2"
-                            value={districtId}
-                            onChange={(e) => setDistrictId(e.target.value)}
-                        >
-                            <option value="">Chọn quận huyện</option>
-                            {districts.map((d) => (
-                                <option key={d.Id} value={d.Id}>
-                                    {d.Name}
-                                </option>
-                            ))}
-                        </select>
-
-                        {/* Chọn phường/xã */}
-                        <select
-                            required
-                            className="w-full border-b border-gray-300 mb-4 py-2 px-2"
-                            value={wardId}
-                            onChange={(e) => setWardId(e.target.value)}
-                        >
-                            <option value="">Chọn phường xã</option>
-                            {wards.map((w) => (
-                                <option key={w.Id} value={w.Id}>
-                                    {w.Name}
-                                </option>
-                            ))}
-                        </select>
-
-                        {/* ✅ Chọn phương thức thanh toán */}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Phương thức thanh toán
                             </label>
-                            <select
-                                required
-                                className="w-full border-b border-gray-300 py-2 px-2"
+                            <Radio.Group
+                                className="flex flex-col gap-2"
                                 value={paymentMethod}
                                 onChange={(e) => setPaymentMethod(e.target.value)}
                             >
-                                <option value="CASH">💰 Tiền mặt (COD)</option>
-                                <option value="VNPAY">🏦 VNPay</option>
-                            </select>
+                                <Radio value="CASH">💰 Tiền mặt (COD)</Radio>
+                                <Radio value="VNPAY" disabled={!vnpayAvailable}>
+                                    🏦 VNPay {!vnpayAvailable && <span className="text-gray-400 text-sm">(không khả dụng)</span>}
+                                </Radio>
+                            </Radio.Group>
                         </div>
                     </form>
                 </div>

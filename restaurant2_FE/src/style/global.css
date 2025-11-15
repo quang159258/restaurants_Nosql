@@ -14,14 +14,18 @@
     z-index: 9999 !important;
 }
 
-.ant-notification {
-    z-index: 100 !important;
+.ant-select-dropdown,
+.ant-cascader-dropdown,
+.ant-picker-dropdown,
+.ant-dropdown,
+.ant-dropdown-menu {
+    z-index: 5000 !important;
 }
 
 * {
     margin: 0;
     padding: 0;
-    transition: 0.3s;
+    box-sizing: border-box;
 }
 
 @layer utilities {

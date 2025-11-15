@@ -1,27 +1,5 @@
 package restaurant.example.restaurant.controller;
 
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
-
-import io.minio.MinioClient;
-import restaurant.example.restaurant.domain.response.file.ResUploadFileDTO;
-import restaurant.example.restaurant.service.FileService;
-import restaurant.example.restaurant.service.StorageService;
-import restaurant.example.restaurant.util.anotation.ApiMessage;
-import restaurant.example.restaurant.util.error.StorageException;
-
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -29,22 +7,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import restaurant.example.restaurant.service.StorageService;
+import restaurant.example.restaurant.util.anotation.ApiMessage;
+
+import java.io.InputStream;
+import java.net.URLConnection;
 
 @RestController
 public class FileController {
-    // @Autowired
-    private final FileService fileService;
-    @Value("${quang.upload-file.base-uri}")
-    private String baseURI;
     private final StorageService storageService;
-    private final MinioClient minioClient;
 
-    public FileController(FileService fileService, StorageService storageService, MinioClient minioClient) {
-        this.fileService = fileService;
+    public FileController(StorageService storageService) {
         this.storageService = storageService;
-        this.minioClient = minioClient;
     }
 
     // @PostMapping("/files")
@@ -114,13 +92,13 @@ public class FileController {
 
     @GetMapping("/files/{fileName}")
     @ApiMessage("Download a file")
-    public ResponseEntity<byte[]> download(
-            @PathVariable String fileName) {
-        try {
-            InputStream stream = storageService.download(fileName);
+    public ResponseEntity<byte[]> download(@PathVariable String fileName) {
+        try (InputStream stream = storageService.download(fileName)) {
             byte[] content = stream.readAllBytes();
+            MediaType mediaType = resolveMediaType(fileName);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                    .contentType(mediaType)
                     .body(content);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(null);
@@ -130,14 +108,26 @@ public class FileController {
     @GetMapping("/images/{fileName}")
     @ApiMessage("Get image file")
     public ResponseEntity<byte[]> getImage(@PathVariable String fileName) {
-        try {
-            InputStream stream = storageService.download(fileName);
+        try (InputStream stream = storageService.download(fileName)) {
             byte[] content = stream.readAllBytes();
+            MediaType mediaType = resolveMediaType(fileName);
             return ResponseEntity.ok()
-                    .contentType(MediaType.IMAGE_JPEG)
+                    .contentType(mediaType)
                     .body(content);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(null);
+        }
+    }
+
+    private MediaType resolveMediaType(String fileName) {
+        String contentType = URLConnection.guessContentTypeFromName(fileName);
+        if (contentType == null) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        try {
+            return MediaType.parseMediaType(contentType);
+        } catch (Exception ex) {
+            return MediaType.APPLICATION_OCTET_STREAM;
         }
     }
 }

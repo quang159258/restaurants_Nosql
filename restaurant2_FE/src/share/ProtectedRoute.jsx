@@ -1,19 +1,27 @@
 import { useContext } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../components/context/auth.context";
 import Unauthorized from "./Unauthorized.page";
-// import Loading from "../components/common/Loading"; // bạn tự tạo hoặc import
-// import NotPermitted from "../components/common/NotPermitted"; // trang 403
 
-
+const normalizeRole = (role) => {
+    if (typeof role === "string") return role;
+    return role?.name || "";
+};
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-    const { user } = useContext(AuthContext);
-    const userRole = user.role;
+    const { user, isAppLoading } = useContext(AuthContext);
+    const location = useLocation();
+    const roleName = normalizeRole(user?.role);
 
-    console.log("check user", userRole)
-    // Nếu vai trò người dùng có trong danh sách cho phép
-    if (allowedRoles.includes(userRole)) {
+    if (isAppLoading) {
+        return null;
+    }
+
+    if (!user?.id) {
+        return <Navigate to="/login" replace state={{ from: location }} />;
+    }
+
+    if (allowedRoles.length === 0 || allowedRoles.includes(roleName)) {
         return <>{children}</>;
     }
 

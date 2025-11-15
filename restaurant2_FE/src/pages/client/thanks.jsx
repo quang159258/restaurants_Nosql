@@ -1,86 +1,97 @@
-// src/pages/ThanksPage.jsx
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { handleVNPayCallback } from "../../services/api.service";
+import { getOrderInfo } from "../../services/api.service";
 
 const ThanksPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const [status, setStatus] = useState("Đang xử lý thanh toán...");
+    const [orderSummary, setOrderSummary] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const processVNPayCallback = async () => {
-            const params = new URLSearchParams(window.location.search);
-            const responseCode = params.get("vnp_ResponseCode");
-            const txnRef = params.get("vnp_TxnRef");
-            const amount = params.get("vnp_Amount");
+        const state = location.state;
+        if (!state?.orderId) {
+            navigate("/");
+            return;
+        }
 
-            if (responseCode && txnRef) {
-                try {
-                    const callbackData = {
-                        vnp_ResponseCode: responseCode,
-                        vnp_TxnRef: txnRef,
-                        vnp_Amount: amount
-                    };
-
-                    const res = await handleVNPayCallback(callbackData);
-                    
-                    if (responseCode === "00") {
-                        setStatus("🎉 Thanh toán thành công! Đơn hàng của bạn đã được xác nhận.");
-                    } else {
-                        setStatus("❌ Thanh toán thất bại. Vui lòng thử lại hoặc liên hệ hỗ trợ.");
-                    }
-
-                    // Redirect về trang chủ sau 5 giây
-                    setTimeout(() => {
-                        navigate("/");
-                    }, 5000);
-
-                } catch (err) {
-                    console.error("VNPay callback error:", err);
-                    setStatus("❌ Có lỗi xảy ra khi xử lý thanh toán. Vui lòng liên hệ hỗ trợ.");
+        const fetchOrderInfo = async () => {
+            try {
+                const res = await getOrderInfo(state.orderId);
+                const data = res?.data ?? res;
+                if (data?.status === "success") {
+                    setOrderSummary({
+                        orderId: data.orderId,
+                        totalPrice: data.totalPrice,
+                        paymentMethod: data.paymentMethod,
+                        paymentStatus: data.paymentStatus,
+                        orderStatus: data.orderStatus
+                    });
+                } else {
+                    setOrderSummary({
+                        orderId: state.orderId,
+                        paymentMethod: state.paymentMethod ?? "CASH",
+                        orderStatus: state.orderStatus ?? "PENDING"
+                    });
                 }
-            } else {
-                setStatus("❌ Không có thông tin thanh toán từ VNPay.");
+            } catch (error) {
+                console.error("Không thể lấy thông tin đơn hàng:", error);
+                setOrderSummary({
+                    orderId: state.orderId,
+                    paymentMethod: state.paymentMethod ?? "CASH",
+                    orderStatus: state.orderStatus ?? "PENDING"
+                });
+            } finally {
+                setLoading(false);
             }
-            
-            setLoading(false);
         };
 
-        processVNPayCallback();
-    }, [navigate]);
+        fetchOrderInfo();
+    }, [location.state, navigate]);
 
     return (
         <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
-            <div className="bg-white rounded-lg shadow-lg w-[1000px] h-[710px] p-8 relative animate-fadeIn">
+            <div className="bg-white rounded-lg shadow-lg w-[900px] p-8 relative animate-fadeIn">
                 <button
                     onClick={() => navigate("/")}
                     className="absolute right-8 text-xl text-black hover:text-red-500 transition-colors"
                 >
                     <i className="fa-solid fa-xmark"></i>
                 </button>
-                
+
                 <div className="text-center">
                     <div className="text-[#C8A97E] text-6xl font-[Great_Vibes,cursive] mb-8">
                         Feliciano
                     </div>
-                    
-                    {/* Payment Status */}
+
                     <div className="mb-8">
                         {loading ? (
                             <div className="flex justify-center items-center">
                                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                                <span className="ml-3 text-lg text-gray-600">{status}</span>
+                                <span className="ml-3 text-lg text-gray-600">Đang tải thông tin đơn hàng...</span>
                             </div>
                         ) : (
-                            <div className="p-6 bg-gray-50 rounded-lg">
-                                <div className="text-xl font-medium text-gray-800 mb-4">
-                                    {status}
+                            <div className="p-6 bg-gray-50 rounded-lg space-y-4">
+                                <div className="text-xl font-medium text-gray-800">
+                                    🎉 Cảm ơn bạn đã đặt hàng! Đơn hàng của bạn đã được ghi nhận.
+                                </div>
+                                <div className="text-left text-gray-700 space-y-1">
+                                    <p><strong>Mã đơn hàng:</strong> {orderSummary?.orderId}</p>
+                                    <p><strong>Phương thức thanh toán:</strong> Tiền mặt (COD)</p>
+                                    <p><strong>Trạng thái đơn hàng:</strong> {orderSummary?.orderStatus}</p>
+                                    {orderSummary?.totalPrice != null && (
+                                        <p><strong>Tổng tiền:</strong> {orderSummary.totalPrice.toLocaleString('vi-VN')} VNĐ</p>
+                                    )}
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                    Bạn sẽ được chuyển hướng về trang chủ trong 5 giây...
+                                    Nhân viên sẽ liên hệ để xác nhận và thu tiền mặt khi giao hàng. Cảm ơn bạn đã tin tưởng chúng tôi!
                                 </div>
+                                <button
+                                    onClick={() => navigate("/")}
+                                    className="mt-4 bg-[#dfc094] text-white py-2 px-6 rounded transition hover:scale-105"
+                                >
+                                    Về trang chủ
+                                </button>
                             </div>
                         )}
                     </div>

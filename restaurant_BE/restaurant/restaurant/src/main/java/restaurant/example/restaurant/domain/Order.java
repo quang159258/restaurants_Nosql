@@ -6,6 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import restaurant.example.restaurant.util.SecurityUtil;
+import restaurant.example.restaurant.util.constant.OrderStatus;
+import restaurant.example.restaurant.util.constant.PaymentMethod;
+import restaurant.example.restaurant.util.constant.PaymentStatus;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,7 +35,8 @@ public class Order {
     private String receiverEmail;
 
     // Trạng thái đơn hàng: PENDING, CONFIRMED, CANCELLED
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status;
 
     // user id
     @ManyToOne
@@ -49,8 +53,11 @@ public class Order {
     private String updatedBy;
 
     // Thông tin thanh toán đơn giản
-    private String paymentMethod; // CASH hoặc VNPAY
-    private String paymentStatus; // UNPAID, PAID, FAILED
+    @Enumerated(EnumType.STRING)
+    private PaymentMethod paymentMethod; // CASH
+
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus paymentStatus; // UNPAID, PAID, FAILED
     private String paymentRef; // Mã thanh toán hoặc ID thanh toán
 
     @PrePersist

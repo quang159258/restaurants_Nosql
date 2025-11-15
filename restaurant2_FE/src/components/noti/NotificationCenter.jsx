@@ -5,8 +5,8 @@ import { useWebSocket } from '../../services/websocket.service';
 
 const { Text } = Typography;
 
-const NotificationCenter = ({ userRole = null }) => {
-    const { notifications, clearNotifications, connected } = useWebSocket(userRole);
+const NotificationCenter = ({ userRole = null, userId = null }) => {
+    const { notifications, clearNotifications, connected } = useWebSocket(userRole, userId);
     const [visible, setVisible] = useState(false);
 
     const getNotificationIcon = (type) => {

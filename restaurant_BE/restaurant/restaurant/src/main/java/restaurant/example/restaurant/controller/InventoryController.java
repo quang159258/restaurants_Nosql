@@ -5,7 +5,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import restaurant.example.restaurant.domain.Dish;
 import restaurant.example.restaurant.service.DishService;
-import restaurant.example.restaurant.controller.WebSocketController;
+import restaurant.example.restaurant.service.notification.NotificationAudience;
+import restaurant.example.restaurant.service.notification.NotificationMessage;
+import restaurant.example.restaurant.service.notification.NotificationService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +21,7 @@ public class InventoryController {
     private DishService dishService;
     
     @Autowired
-    private WebSocketController webSocketController;
+    private NotificationService notificationService;
 
     /**
      * Cập nhật tồn kho cho một sản phẩm
@@ -42,12 +44,7 @@ public class InventoryController {
             dish.setStock(newStock);
             dishService.handleUpdateDish(dish);
 
-            // Gửi thông báo WebSocket
-            try {
-                webSocketController.sendStockUpdateNotification(dish.getName(), oldStock, newStock);
-            } catch (Exception e) {
-                System.err.println("Lỗi khi gửi thông báo WebSocket: " + e.getMessage());
-            }
+            notifyStockChange(dish.getName(), oldStock, newStock);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -129,5 +126,23 @@ public class InventoryController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Lỗi khi lấy thông tin tồn kho: " + e.getMessage());
         }
+    }
+
+    private void notifyStockChange(String dishName, Integer oldStock, Integer newStock) {
+        NotificationMessage payload = NotificationMessage.builder()
+                .put("type", "stock_update")
+                .put("dishName", dishName)
+                .put("oldStock", oldStock)
+                .put("newStock", newStock)
+                .put("message", "Tồn kho " + dishName + " thay đổi từ " + oldStock + " -> " + newStock)
+                .build();
+        notificationService.enqueue(NotificationMessage.builder()
+                .audience(NotificationAudience.SUPER_ADMIN)
+                .payload(payload.getPayload())
+                .build());
+        notificationService.enqueue(NotificationMessage.builder()
+                .audience(NotificationAudience.STAFF)
+                .payload(payload.getPayload())
+                .build());
     }
 }

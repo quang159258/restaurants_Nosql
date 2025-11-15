@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { fetchAllOrders, fetchAllOrdersMy, fetchMyOrder, getImageUrl } from "../../../services/api.service";
-import { Modal, Space, Table } from "antd";
-import { DeleteOutlined, EyeOutlined } from "@ant-design/icons";
+import { fetchAllOrdersMy, getImageUrl, createVnpayPaymentLink } from "../../../services/api.service";
+import { Modal, Space, Table, Button } from "antd";
+import { EyeOutlined } from "@ant-design/icons";
 
 const ListOrder = () => {
     const [dishes, setDishes] = useState([]);
@@ -63,6 +63,21 @@ const ListOrder = () => {
         setIsModalVisible(true);   // mở modal
     };
 
+    const handlePayOrder = async (order) => {
+        try {
+            const res = await createVnpayPaymentLink(order.id);
+            const paymentUrl = res?.data?.paymentUrl;
+            if (paymentUrl) {
+                window.location.href = paymentUrl;
+            } else {
+                addNotification("Không thể tạo liên kết", "Vui lòng thử lại sau", "error");
+            }
+        } catch (error) {
+            const message = error?.response?.data?.message || "Không thể tạo liên kết thanh toán";
+            addNotification("Lỗi thanh toán", message, "error");
+        }
+    };
+
 
     const columns = [
         {
@@ -102,23 +117,26 @@ const ListOrder = () => {
             dataIndex: "status",
             key: "status",
             render: (status) => {
+                const normalized = status || "";
                 const colorMap = {
                     PENDING: "text-blue-500",
                     CONFIRMED: "text-green-500",
-                    DELIVERED: "text-orange-500",
-                    CANCELED: "text-red-500",
+                    DELIVERING: "text-orange-500",
+                    DELIVERED: "text-emerald-500",
+                    CANCELLED: "text-red-500",
                 };
 
                 const textMap = {
                     PENDING: "Chờ xác nhận",
                     CONFIRMED: "Đã xác nhận",
-                    DELIVERED: "Đã giao hàng",
-                    CANCELED: "Đã hủy",
+                    DELIVERING: "Đang giao",
+                    DELIVERED: "Đã giao",
+                    CANCELLED: "Đã hủy",
                 };
 
                 return (
-                    <span className={`font-medium ${colorMap[status] || "text-black"}`}>
-                        {textMap[status] || status}
+                    <span className={`font-medium ${colorMap[normalized] || "text-black"}`}>
+                        {textMap[normalized] || normalized}
                     </span>
                 );
             },
@@ -138,6 +156,7 @@ const ListOrder = () => {
             dataIndex: "paymentStatus",
             key: "paymentStatus",
             render: (status) => {
+                const normalized = status === "PAYMENT_UNPAID" ? "UNPAID" : status;
                 const colorMap = {
                     UNPAID: "text-red-500",
                     PAID: "text-green-500",
@@ -151,8 +170,8 @@ const ListOrder = () => {
                 };
 
                 return (
-                    <span className={`font-medium ${colorMap[status] || "text-gray-500"}`}>
-                        {textMap[status] || status}
+                    <span className={`font-medium ${colorMap[normalized] || "text-gray-500"}`}>
+                        {textMap[normalized] || normalized}
                     </span>
                 );
             },
@@ -168,6 +187,11 @@ const ListOrder = () => {
                         <a onClick={() => handleView(record)}>
                             <EyeOutlined style={{ color: "#1890ff" }} />
                         </a>
+                        {record.paymentMethod === "VNPAY" && record.paymentStatus !== "PAID" && record.paymentStatus !== "FAILED" && (
+                            <Button size="small" type="primary" onClick={() => handlePayOrder(record)}>
+                                Thanh toán
+                            </Button>
+                        )}
                     </Space>
                 </div>
 

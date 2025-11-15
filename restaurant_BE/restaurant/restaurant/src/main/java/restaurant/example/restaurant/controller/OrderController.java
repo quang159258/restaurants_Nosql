@@ -10,11 +10,14 @@ import org.springframework.web.bind.annotation.*;
 
 import com.turkraft.springfilter.boot.Filter;
 
+import jakarta.validation.Valid;
+import restaurant.example.restaurant.domain.request.AdminCreateOrderRequest;
 import restaurant.example.restaurant.domain.Dish;
 import restaurant.example.restaurant.domain.Order;
 import restaurant.example.restaurant.domain.response.ResOrder;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
 import restaurant.example.restaurant.service.OrderService;
+import restaurant.example.restaurant.util.anotation.ApiMessage;
 import restaurant.example.restaurant.util.error.OrderException;
 
 @RestController
@@ -83,5 +86,13 @@ public class OrderController {
     public ResponseEntity<Void> deleteOrder(@PathVariable Long id) throws OrderException {
         orderService.deleteOrderById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/admin")
+    @ApiMessage("Admin create order")
+    public ResponseEntity<ResOrder> createOrderForAdmin(@Valid @RequestBody AdminCreateOrderRequest request)
+            throws OrderException {
+        ResOrder res = orderService.createOrderForAdmin(request);
+        return ResponseEntity.status(201).body(res);
     }
 }
