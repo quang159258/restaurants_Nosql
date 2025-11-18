@@ -3,7 +3,7 @@ import { Radio } from "antd";
 import bg3 from "../../../assets/img/bg_3.jpg.webp";
 import food1 from "../../../assets/img/food-1.webp";
 import { AuthContext } from "../../context/auth.context";
-import { getAllDishInCart, getCart, getVnpayConfig } from "../../../services/api.service";
+import { getAllDishInCart, getCart, getVnpayConfig, checkOutCart } from "../../../services/api.service";
 import Notification from "../../noti/Notification";
 import { useNavigate } from "react-router-dom";
 import AddressSelector from "../../common/AddressSelector";
@@ -71,17 +71,48 @@ const ConfirmPage = () => {
             addNotification("VNPay không khả dụng", "Vui lòng chọn phương thức thanh toán khác", "warning");
             return;
         }
-        navigate("/payment", {
-            state: {
-                formData: {
-                    receiverName: name,
-                    receiverPhone: phone,
-                    receiverAddress: addressValue,
-                    receiverEmail: email,
+        
+        // Nếu là COD, tạo order luôn
+        if (paymentMethod === "CASH") {
+            try {
+                const response = await checkOutCart(
+                    name,
+                    phone,
+                    addressValue,
+                    email,
                     paymentMethod
+                );
+                
+                if (response.status === 200) {
+                    const orderData = response.data;
+                    addNotification(
+                        "Đặt hàng thành công!", 
+                        "Đơn hàng của bạn đã được tạo. Vui lòng chờ xác nhận từ nhân viên.", 
+                        "success"
+                    );
+                    setTimeout(() => {
+                        navigate("/order", { state: { orderId: orderData.orderId } });
+                    }, 2000);
                 }
+            } catch (error) {
+                console.error("Error creating order:", error);
+                const serverMessage = error?.response?.data?.message || "Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại.";
+                addNotification("Lỗi", serverMessage, "error");
             }
-        });
+        } else {
+            // Nếu là VNPay, chuyển sang /payment
+            navigate("/payment", {
+                state: {
+                    formData: {
+                        receiverName: name,
+                        receiverPhone: phone,
+                        receiverAddress: addressValue,
+                        receiverEmail: email,
+                        paymentMethod
+                    }
+                }
+            });
+        }
     };
 
 

@@ -28,5 +28,9 @@ public class ResOrder {
 
     private String status;
 
+    private String paymentMethod;
+
+    private String paymentStatus;
+
     private List<ResOrderItem> listOrderItem;
 }

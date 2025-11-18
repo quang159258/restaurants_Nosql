@@ -125,7 +125,7 @@ const App = () => {
         </LayoutApp>
       ),
       children: [
-        { index: true, element: <IndexPage /> },
+        { index: true, element: <OrderPageAdmin /> },
         { path: "info", element: <InfoPageAdmin /> },
         { path: "order", element: <OrderPageAdmin /> },
         { path: "inventory", element: <StaffImportStock /> },

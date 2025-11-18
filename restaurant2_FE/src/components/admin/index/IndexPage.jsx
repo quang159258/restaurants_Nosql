@@ -1,127 +1,283 @@
-import { RiseOutlined, ShoppingOutlined, LineChartOutlined } from '@ant-design/icons';
+import { useEffect, useState } from 'react';
+import { Card, Table, Tag, Typography, Spin } from 'antd';
+import { TrophyOutlined, FireOutlined, DollarOutlined } from '@ant-design/icons';
+import { fetchAllDish, fetchAllOrders, getAnalyticsOverview } from '../../../services/api.service';
+
+const { Title, Text } = Typography;
 
 const IndexPage = () => {
+    const [loading, setLoading] = useState(true);
+    const [topDishesToday, setTopDishesToday] = useState([]);
+    const [topDishesMonth, setTopDishesMonth] = useState([]);
+    const [recentOrders, setRecentOrders] = useState([]);
+    const [stats, setStats] = useState({
+        totalRevenue: 0,
+        totalOrders: 0,
+        pendingOrders: 0
+    });
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                
+                // Fetch all dishes to get soldToday
+                const dishesRes = await fetchAllDish(1, 1000, 1);
+                const dishesData = dishesRes?.data?.result || dishesRes?.data || [];
+                
+                // Sort by soldToday for today's top dishes
+                const topToday = [...dishesData]
+                    .filter(dish => dish.soldToday > 0)
+                    .sort((a, b) => (b.soldToday || 0) - (a.soldToday || 0))
+                    .slice(0, 5)
+                    .map((dish, index) => ({
+                        key: dish.id,
+                        rank: index + 1,
+                        name: dish.name,
+                        sold: dish.soldToday || 0,
+                        price: dish.price || 0,
+                        revenue: (dish.soldToday || 0) * (dish.price || 0)
+                    }));
+                setTopDishesToday(topToday);
+
+                // Fetch analytics for monthly data
+                const today = new Date();
+                const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                const analyticsRes = await getAnalyticsOverview({
+                    startDate: startOfMonth.toISOString().split('T')[0],
+                    endDate: today.toISOString().split('T')[0],
+                    topLimit: 5
+                });
+                const analyticsData = analyticsRes?.data?.data || analyticsRes?.data || {};
+                setTopDishesMonth(analyticsData.topDishes || []);
+                setStats({
+                    totalRevenue: analyticsData.totalRevenue || 0,
+                    totalOrders: analyticsData.totalOrders || 0,
+                    pendingOrders: analyticsData.pendingOrders || 0
+                });
+
+                // Fetch recent orders
+                const ordersRes = await fetchAllOrders(1, 5);
+                const ordersData = ordersRes?.data?.result || ordersRes?.data || [];
+                setRecentOrders(ordersData.slice(0, 5));
+            } catch (error) {
+                console.error('Error fetching dashboard data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    const todayColumns = [
+        {
+            title: 'Hạng',
+            dataIndex: 'rank',
+            key: 'rank',
+            width: 60,
+            render: (rank) => (
+                <Tag color={rank === 1 ? 'gold' : rank === 2 ? 'default' : rank === 3 ? 'orange' : 'blue'}>
+                    #{rank}
+                </Tag>
+            )
+        },
+        {
+            title: 'Tên món',
+            dataIndex: 'name',
+            key: 'name',
+        },
+        {
+            title: 'Đã bán hôm nay',
+            dataIndex: 'sold',
+            key: 'sold',
+            render: (sold) => <Text strong>{sold}</Text>
+        },
+        {
+            title: 'Doanh thu',
+            dataIndex: 'revenue',
+            key: 'revenue',
+            render: (revenue) => (
+                <Text style={{ color: '#52c41a', fontWeight: 600 }}>
+                    {revenue.toLocaleString('vi-VN')} đ
+                </Text>
+            )
+        },
+    ];
+
+    const monthColumns = [
+        {
+            title: 'Hạng',
+            dataIndex: 'rank',
+            key: 'rank',
+            width: 60,
+            render: (_, __, index) => (
+                <Tag color={index === 0 ? 'gold' : index === 1 ? 'default' : index === 2 ? 'orange' : 'blue'}>
+                    #{index + 1}
+                </Tag>
+            )
+        },
+        {
+            title: 'Tên món',
+            dataIndex: 'dishName',
+            key: 'dishName',
+        },
+        {
+            title: 'Số lượng',
+            dataIndex: 'quantity',
+            key: 'quantity',
+            render: (qty) => <Text strong>{qty || 0}</Text>
+        },
+        {
+            title: 'Doanh thu',
+            dataIndex: 'revenue',
+            key: 'revenue',
+            render: (revenue) => (
+                <Text style={{ color: '#52c41a', fontWeight: 600 }}>
+                    {revenue?.toLocaleString('vi-VN') || 0} đ
+                </Text>
+            )
+        },
+    ];
+
+    const recentOrdersColumns = [
+        {
+            title: 'Mã đơn',
+            dataIndex: 'id',
+            key: 'id',
+        },
+        {
+            title: 'Khách hàng',
+            dataIndex: 'receiverName',
+            key: 'receiverName',
+        },
+        {
+            title: 'Tổng tiền',
+            dataIndex: 'totalPrice',
+            key: 'totalPrice',
+            render: (price) => `${price?.toLocaleString('vi-VN') || 0} đ`
+        },
+        {
+            title: 'Trạng thái',
+            dataIndex: 'status',
+            key: 'status',
+            render: (status) => {
+                const colorMap = {
+                    PENDING: 'blue',
+                    CONFIRMED: 'green',
+                    DELIVERING: 'orange',
+                    DELIVERED: 'teal',
+                    CANCELLED: 'red',
+                };
+                return <Tag color={colorMap[status] || 'default'}>{status}</Tag>;
+            }
+        },
+    ];
+
     return (
         <div className="w-full p-3">
-            {/* Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Card 1 - Tổng giảm giá */}
-                <div className="bg-white rounded-2xl p-3 shadow-md hover:shadow-lg transition-shadow duration-300">
+            <Spin spinning={loading}>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <Card className="shadow-md hover:shadow-lg transition-shadow">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-6">
-                            <div className="bg-orange-100 text-orange-500 p-3 rounded-full">
-                                <RiseOutlined className="text-2xl" />
-                            </div>
                             <div>
-                                <h3 className="text-gray-700 text-sm">Tổng giảm giá</h3>
-                                <h1 className="text-2xl font-bold text-gray-900">1,000$</h1>
+                                <Text type="secondary" className="text-sm">Tổng doanh thu tháng</Text>
+                                <Title level={3} style={{ margin: '8px 0 0 0', color: '#52c41a' }}>
+                                    {stats.totalRevenue.toLocaleString('vi-VN')} đ
+                                </Title>
                             </div>
+                            <DollarOutlined className="text-4xl text-green-500" />
                         </div>
-                        <div className="relative w-16 h-16">
-                            <svg className="absolute top-0 left-0" width="64" height="64">
-                                <circle r="24" cx="32" cy="32" fill="none" stroke="#e5e7eb" strokeWidth="6" />
-                                <circle r="24" cx="32" cy="32" fill="none" stroke="#f59e0b" strokeWidth="6" strokeDasharray="150.8" strokeDashoffset="120" strokeLinecap="round" transform="rotate(-90 32 32)" />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-yellow-500">20%</div>
+                    </Card>
+
+                    <Card className="shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between">
+                            <div>
+                                <Text type="secondary" className="text-sm">Tổng đơn hàng</Text>
+                                <Title level={3} style={{ margin: '8px 0 0 0' }}>
+                                    {stats.totalOrders}
+                                </Title>
+                            </div>
+                            <FireOutlined className="text-4xl text-orange-500" />
                         </div>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-4">Cập nhật 14 giờ trước</p>
+                    </Card>
+
+                    <Card className="shadow-md hover:shadow-lg transition-shadow">
+                    <div className="flex items-center justify-between">
+                            <div>
+                                <Text type="secondary" className="text-sm">Đơn chờ xác nhận</Text>
+                                <Title level={3} style={{ margin: '8px 0 0 0', color: '#1890ff' }}>
+                                    {stats.pendingOrders}
+                                </Title>
+                            </div>
+                            <TrophyOutlined className="text-4xl text-blue-500" />
+                        </div>
+                    </Card>
                 </div>
 
-                {/* Card 2 - Tiền lãi */}
-                <div className="bg-white rounded-2xl p-3 shadow-md hover:shadow-lg transition-shadow duration-300">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="bg-pink-100 text-pink-500 p-3 rounded-full">
-                                <ShoppingOutlined className="text-2xl" />
-                            </div>
-                            <div>
-                                <h3 className="text-gray-700 text-sm">Tiền lãi</h3>
-                                <h1 className="text-2xl font-bold text-gray-900">5,000$</h1>
-                            </div>
-                        </div>
-                        <div className="relative w-16 h-16">
-                            <svg className="absolute top-0 left-0" width="64" height="64">
-                                <circle r="24" cx="32" cy="32" fill="none" stroke="#e5e7eb" strokeWidth="6" />
-                                <circle r="24" cx="32" cy="32" fill="none" stroke="#d946ef" strokeWidth="6" strokeDasharray="150.8" strokeDashoffset="30" strokeLinecap="round" transform="rotate(-90 32 32)" />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-pink-500">80%</div>
-                        </div>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-4">Cập nhật 14 giờ trước</p>
+                {/* Top Dishes Today and Month */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <Card 
+                        title={
+                            <span>
+                                <FireOutlined className="mr-2 text-orange-500" />
+                                Top món bán chạy hôm nay
+                            </span>
+                        }
+                        className="shadow-md"
+                    >
+                        {topDishesToday.length > 0 ? (
+                            <Table
+                                dataSource={topDishesToday}
+                                columns={todayColumns}
+                                pagination={false}
+                                size="small"
+                            />
+                        ) : (
+                            <Text type="secondary">Chưa có dữ liệu bán hàng hôm nay</Text>
+                        )}
+                    </Card>
+
+                    <Card 
+                        title={
+                            <span>
+                                <TrophyOutlined className="mr-2 text-gold" />
+                                Top món bán chạy tháng này
+                            </span>
+                        }
+                        className="shadow-md"
+                    >
+                        {topDishesMonth.length > 0 ? (
+                            <Table
+                                dataSource={topDishesMonth.map((item, idx) => ({ ...item, key: idx }))}
+                                columns={monthColumns}
+                                pagination={false}
+                                size="small"
+                            />
+                        ) : (
+                            <Text type="secondary">Chưa có dữ liệu tháng này</Text>
+                        )}
+                    </Card>
                 </div>
 
-                {/* Card 3 - Thu nhập */}
-                <div className="bg-white rounded-2xl p-3 shadow-md hover:shadow-lg transition-shadow duration-300">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="bg-green-100 text-green-500 p-3 rounded-full">
-                                <LineChartOutlined className="text-2xl" />
-                            </div>
-                            <div>
-                                <h3 className="text-gray-700 text-sm">Thu nhập</h3>
-                                <h1 className="text-2xl font-bold text-gray-900">25,000$</h1>
-                            </div>
-                        </div>
-                        <div className="relative w-16 h-16">
-                            <svg className="absolute top-0 left-0" width="64" height="64">
-                                <circle r="24" cx="32" cy="32" fill="none" stroke="#e5e7eb" strokeWidth="6" />
-                                <circle r="24" cx="32" cy="32" fill="none" stroke="#10b981" strokeWidth="6" strokeDasharray="150.8" strokeDashoffset="0" strokeLinecap="round" transform="rotate(-90 32 32)" />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-green-500">100%</div>
-                        </div>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-4">Cập nhật 14 giờ trước</p>
-                </div>
-            </div>
-
-            {/* Table Section - Đơn hàng gần đây */}
-            <div className="mt-5">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Đơn hàng gần đây</h2>
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="py-3 px-4 text-sm font-medium text-gray-600">Tên món ăn</th>
-                                <th className="py-3 px-4 text-sm font-medium text-gray-600">Số lượng</th>
-                                <th className="py-3 px-4 text-sm font-medium text-gray-600">Đơn giá</th>
-                                <th className="py-3 px-4 text-sm font-medium text-gray-600">Thành tiền</th>
-                                <th className="py-3 px-4 text-sm font-medium text-gray-600">Chi tiết</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr className="border-t hover:bg-gray-50 transition-colors duration-200">
-                                <td className="py-3 px-4 text-gray-800">Ngũ cốc</td>
-                                <td className="py-3 px-4 text-gray-800">10</td>
-                                <td className="py-3 px-4 text-gray-800">15$</td>
-                                <td className="py-3 px-4 text-pink-500 font-medium">150$</td>
-                                <td className="py-3 px-4"><button className="text-blue-500 hover:underline">Chi tiết</button></td>
-                            </tr>
-                            <tr className="border-t hover:bg-gray-50 transition-colors duration-200">
-                                <td className="py-3 px-4 text-gray-800">Bánh mì</td>
-                                <td className="py-3 px-4 text-gray-800">5</td>
-                                <td className="py-3 px-4 text-gray-800">20$</td>
-                                <td className="py-3 px-4 text-pink-500 font-medium">100$</td>
-                                <td className="py-3 px-4"><button className="text-blue-500 hover:underline">Chi tiết</button></td>
-                            </tr>
-                            <tr className="border-t hover:bg-gray-50 transition-colors duration-200">
-                                <td className="py-3 px-4 text-gray-800">Rượu vang</td>
-                                <td className="py-3 px-4 text-gray-800">2</td>
-                                <td className="py-3 px-4 text-gray-800">50$</td>
-                                <td className="py-3 px-4 text-pink-500 font-medium">100$</td>
-                                <td className="py-3 px-4"><button className="text-blue-500 hover:underline">Chi tiết</button></td>
-                            </tr>
-                            <tr className="border-t hover:bg-gray-50 transition-colors duration-200">
-                                <td className="py-3 px-4 text-gray-800">Bò bít tết</td>
-                                <td className="py-3 px-4 text-gray-800">10</td>
-                                <td className="py-3 px-4 text-gray-800">30$</td>
-                                <td className="py-3 px-4 text-pink-500 font-medium">300$</td>
-                                <td className="py-3 px-4"><button className="text-blue-500 hover:underline">Chi tiết</button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                {/* Recent Orders */}
+                <Card 
+                    title="Đơn hàng gần đây"
+                    className="shadow-md"
+                >
+                    {recentOrders.length > 0 ? (
+                        <Table
+                            dataSource={recentOrders.map(order => ({ ...order, key: order.id }))}
+                            columns={recentOrdersColumns}
+                            pagination={false}
+                            size="small"
+                        />
+                    ) : (
+                        <Text type="secondary">Chưa có đơn hàng nào</Text>
+                    )}
+                </Card>
+            </Spin>
         </div>
     );
 };

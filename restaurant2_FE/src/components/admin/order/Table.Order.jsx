@@ -223,6 +223,16 @@ const OrderTable = () => {
             render: (price) => `${price.toLocaleString()} đ`,
         },
         {
+            title: "Thanh toán",
+            dataIndex: "paymentMethod",
+            key: "paymentMethod",
+            render: (method) => (
+                <Tag color={method === "CASH" ? "orange" : "blue"}>
+                    {method === "CASH" ? "💰 COD" : method === "VNPAY" ? "🏦 VNPay" : method || "N/A"}
+                </Tag>
+            ),
+        },
+        {
             title: "Trạng thái",
             dataIndex: "status",
             key: "status",
@@ -236,20 +246,57 @@ const OrderTable = () => {
                     CANCELLED: "red",
                 };
 
+                const textMap = {
+                    PENDING: "Chờ xác nhận",
+                    CONFIRMED: "Đã xác nhận",
+                    DELIVERING: "Đang giao",
+                    DELIVERED: "Đã giao",
+                    CANCELLED: "Đã hủy",
+                };
+
+                // Xác định nút tiếp theo có thể bấm
+                const getNextStatus = (currentStatus) => {
+                    switch (currentStatus) {
+                        case "PENDING":
+                            return "CONFIRMED";
+                        case "CONFIRMED":
+                            return "DELIVERING";
+                        case "DELIVERING":
+                            return "DELIVERED";
+                        default:
+                            return null;
+                    }
+                };
+
+                const nextStatus = getNextStatus(normalized);
+                const isCancelled = normalized === "CANCELLED";
+                const isDelivered = normalized === "DELIVERED";
+
                 return (
-                    <select
-                        value={normalized}
-                        onChange={(e) => handleStatusChange(record.id, e.target.value)}
-                        style={{
-                            color: colorMap[normalized] || "black",
-                        }}
-                    >
-                        <option value="PENDING" style={{ color: "blue" }}>Chờ xác nhận</option>
-                        <option value="CONFIRMED" style={{ color: "green" }}>Đã xác nhận</option>
-                        <option value="DELIVERING" style={{ color: "orange" }}>Đang giao</option>
-                        <option value="DELIVERED" style={{ color: "teal" }}>Đã giao</option>
-                        <option value="CANCELLED" style={{ color: "red" }}>Đã hủy</option>
-                    </select>
+                    <Space direction="vertical" size="small">
+                        <Tag color={colorMap[normalized] || "default"}>
+                            {textMap[normalized] || normalized}
+                        </Tag>
+                        {!isCancelled && !isDelivered && nextStatus && (
+                            <Button
+                                type="primary"
+                                size="small"
+                                onClick={() => handleStatusChange(record.id, nextStatus)}
+                                style={{
+                                    background: nextStatus === "CONFIRMED" ? "#52c41a" :
+                                                nextStatus === "DELIVERING" ? "#faad14" :
+                                                nextStatus === "DELIVERED" ? "#1890ff" : "#C8A97E",
+                                    borderColor: nextStatus === "CONFIRMED" ? "#52c41a" :
+                                                nextStatus === "DELIVERING" ? "#faad14" :
+                                                nextStatus === "DELIVERED" ? "#1890ff" : "#C8A97E",
+                                }}
+                            >
+                                {nextStatus === "CONFIRMED" ? "Xác nhận" :
+                                 nextStatus === "DELIVERING" ? "Đang giao" :
+                                 nextStatus === "DELIVERED" ? "Đã giao" : ""}
+                            </Button>
+                        )}
+                    </Space>
                 );
             },
         },

@@ -11,9 +11,18 @@ const Category = (props) => {
             <div className='container'>
                 <div className="nav__change">
                     <div className="row g-0">
+                        {/* Tab "Tất cả" */}
+                        <div className="nav__change__item col-12 col-md-2 mb-3">
+                            <button
+                                className={`button__change ${active === -1 ? 'active' : ''}`}
+                                onClick={() => handleClick(-1, "all")}
+                            >
+                                Tất cả
+                            </button>
+                        </div>
 
                         {categories.map((item, index) => (
-                            <div key={index} className="nav__change__item col-12 col-md-2 mb-3">
+                            <div key={item.id || index} className="nav__change__item col-12 col-md-2 mb-3">
                                 <button
                                     className={`button__change ${active === index ? 'active' : ''}`}
                                     onClick={() => handleClick(index, item.id)} // item.id bây giờ có giá trị

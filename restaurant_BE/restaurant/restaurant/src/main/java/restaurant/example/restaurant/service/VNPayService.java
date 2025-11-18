@@ -60,7 +60,8 @@ public class VnpayService {
 
         String query = buildQuery(params);
         String secureHash = hmacSHA512(properties.getHashSecret(), buildHashData(params));
-        String paymentUrl = properties.getBaseUrl() + "?" + query + "vnp_SecureHash=" + secureHash;
+        // URL encode the secure hash and properly append it to the query string
+        String paymentUrl = properties.getBaseUrl() + "?" + query + "&vnp_SecureHash=" + urlEncode(secureHash);
 
         return new PaymentUrlResponse(paymentUrl, txnRef);
     }

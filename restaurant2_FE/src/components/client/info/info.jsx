@@ -54,28 +54,27 @@ export const InfoPage = () => {
     }, [user]);
 
     const handleImageUpload = async (file) => {
-        // Hiển thị preview
-        debugger
         // Tạo URL tạm thời để hiển thị ảnh xem trước
         const reader = new FileReader();
         reader.onload = () => {
-            setPreviewImage(reader.result);
+            setAvatarUrl(reader.result);
         };
         reader.readAsDataURL(file);
 
-
         try {
             const uploadResponse = await handleUploadFile(file);
-            console.log("Lỗi upload ảnh:", uploadResponse);
+            const fileName = uploadResponse?.data || uploadResponse;
 
-            const fileName = uploadResponse.data;
+            if (!fileName) {
+                throw new Error("Không lấy được tên file sau khi upload");
+            }
 
             // Update avatar trong server và context
             const res = await updateUserApi(user.id, userName, gender, phone, address, fileName);
             if (res.data) {
                 addNotification("Cập nhật ảnh", "Ảnh đại diện đã được cập nhật", "success");
                 setUser(res.data);
-                setAvatarUrl(uploadedUrl);
+                // Avatar URL sẽ được cập nhật từ res.data hoặc từ getImageUrlFromFileName
             } else {
                 addNotification("Lỗi", "Không thể cập nhật avatar", "error");
             }
@@ -88,7 +87,6 @@ export const InfoPage = () => {
     };
 
     const handleSubmit = async () => {
-        debugger
         const res = await updateUserApi(user.id, userName, gender, phone, address, avatarUrl);
         if (res.data) {
             addNotification("Cập nhật thành công", "Thông tin người dùng đã được cập nhật", "success");
@@ -143,7 +141,7 @@ export const InfoPage = () => {
 
             {/* Form */}
             <div className="relative z-10 flex justify-center w-full py-16">
-                <div className="w-full max-w-2xl bg-white px-5 py-5 rounded-2xl shadow-lg">
+                <form className="w-full max-w-2xl bg-white px-5 py-5 rounded-2xl shadow-lg" autoComplete="off">
                     <h1 className="text-xl font-bold text-gray-800 text-center mb-6">Thông tin khách hàng</h1>
 
                     {/* Avatar */}
@@ -234,18 +232,21 @@ export const InfoPage = () => {
                             value={currentPassword}
                             onChange={(e) => setCurrentPassword(e.target.value)}
                             size="large"
+                            autoComplete="off"
                         />
                         <Input.Password
                             placeholder="Mật khẩu mới"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
                             size="large"
+                            autoComplete="off"
                         />
                         <Input.Password
                             placeholder="Xác nhận mật khẩu mới"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             size="large"
+                            autoComplete="off"
                         />
                         <Button
                             type="primary"
@@ -258,7 +259,7 @@ export const InfoPage = () => {
                             Đổi mật khẩu
                         </Button>
                     </div>
-                </div>
+                </form>
             </div>
 
             {/* Notification */}

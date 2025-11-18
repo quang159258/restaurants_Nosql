@@ -8,6 +8,7 @@ const SimplePayment = () => {
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [orderCreated, setOrderCreated] = useState(false);
     
     const formData = location.state?.formData;
 
@@ -16,6 +17,9 @@ const SimplePayment = () => {
         const newNotif = { id, message, description, type };
         setNotifications((prev) => [...prev, newNotif]);
     };
+
+    // SimplePayment chỉ dành cho VNPay, không tự động tạo order
+    // User phải bấm nút "Thanh toán VNPay" để tạo order và redirect
 
     const handlePayment = async () => {
         if (!formData) {
@@ -35,21 +39,14 @@ const SimplePayment = () => {
 
             if (response.status === 200) {
                 const orderData = response.data;
+                setOrderCreated(true);
                 
                 if (formData.paymentMethod === "VNPAY" && orderData.paymentUrl) {
-                    // Redirect to VNPay
+                    // VNPay: Redirect to paymentUrl từ VNPayService
                     window.location.href = orderData.paymentUrl;
                 } else {
-                    // Cash payment - redirect to success page
-                    addNotification(
-                        "Đặt hàng thành công!", 
-                        "Đơn hàng của bạn đã được tạo. Vui lòng chờ xác nhận từ nhân viên.", 
-                        "success"
-                    );
-                    
-                    setTimeout(() => {
-                        navigate("/orders", { state: { orderId: orderData.orderId } });
-                    }, 2000);
+                    // COD: Chỉ cần đặt đơn, redirect ngay về /order
+                    navigate("/order", { state: { orderId: orderData.orderId } });
                 }
             }
         } catch (error) {

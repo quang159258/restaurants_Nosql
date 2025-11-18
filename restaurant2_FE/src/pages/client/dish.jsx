@@ -5,10 +5,10 @@ import { ListDish } from "../../components/client/Dish/ListDish";
 import { fetchAllCategories, fetchAllDish } from "../../services/api.service";
 
 const DishPage = () => {
-    const [active, setActive] = useState(0);
+    const [active, setActive] = useState(-1); // -1 cho tab "Tất cả"
     const [categories, setCategories] = useState([]);
     const [dishes, setDishes] = useState([]);
-    const [type, setType] = useState(1);
+    const [type, setType] = useState("all"); // Mặc định là "all" để hiển thị tất cả
     const [page, setPage] = useState(1)
     const [total, setTotal] = useState();
     const [size, setSize] = useState(6)

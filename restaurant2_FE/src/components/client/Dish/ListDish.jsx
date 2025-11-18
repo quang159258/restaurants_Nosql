@@ -51,6 +51,7 @@ export const ListDish = ({ dishes = [], total = 0, setPage, page }) => {
             const res = await adDishInCart(1, dishItem.price, dishItem.price, dishItem.id);
             if (res.data) {
                 addNotification('Add new dish', 'Thêm món ăn vào giỏ hàng thành công', 'success');
+                // Refresh cart to update count
                 await fetchCart();
             } else {
                 addNotification('Error', 'Thêm món ăn vào giỏ hàng thất bại', 'error');

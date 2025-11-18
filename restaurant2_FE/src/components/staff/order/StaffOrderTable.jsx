@@ -1,6 +1,6 @@
-import { Card, Modal, Space, Table, Tag, Typography, Select } from "antd";
+import { Card, Modal, Space, Table, Tag, Typography, Select, Button } from "antd";
 import { useEffect, useState } from "react";
-import { fetchAllOrders, getImageUrlFromFileName } from "../../../services/api.service";
+import { fetchAllOrders, getImageUrlFromFileName, updateOrder } from "../../../services/api.service";
 
 const STATUS_COLORS = {
     PENDING: "blue",
@@ -96,14 +96,76 @@ const StaffOrderTable = () => {
             render: (price) => `${(price || 0).toLocaleString("vi-VN")} đ`,
         },
         {
+            title: "Thanh toán",
+            dataIndex: "paymentMethod",
+            key: "paymentMethod",
+            render: (method) => (
+                <Tag color={method === "CASH" ? "orange" : "blue"}>
+                    {method === "CASH" ? "💰 COD" : method === "VNPAY" ? "🏦 VNPay" : method || "N/A"}
+                </Tag>
+            ),
+        },
+        {
             title: "Trạng thái",
             dataIndex: "status",
             key: "status",
-            render: (status) => (
-                <Tag color={STATUS_COLORS[status] || "default"}>
-                    {STATUS_LABELS[status] || status}
-                </Tag>
-            ),
+            render: (status, record) => {
+                // Xác định nút tiếp theo có thể bấm
+                const getNextStatus = (currentStatus) => {
+                    switch (currentStatus) {
+                        case "PENDING":
+                            return "CONFIRMED";
+                        case "CONFIRMED":
+                            return "DELIVERING";
+                        case "DELIVERING":
+                            return "DELIVERED";
+                        default:
+                            return null;
+                    }
+                };
+
+                const nextStatus = getNextStatus(status);
+                const isCancelled = status === "CANCELLED";
+                const isDelivered = status === "DELIVERED";
+
+                const handleStatusChange = async (id, newStatus) => {
+                    try {
+                        const res = await updateOrder(id, newStatus);
+                        if (res.data) {
+                            fetchOrders(page, size);
+                        }
+                    } catch (error) {
+                        console.error("Không thể cập nhật trạng thái đơn hàng", error);
+                    }
+                };
+
+                return (
+                    <Space direction="vertical" size="small">
+                        <Tag color={STATUS_COLORS[status] || "default"}>
+                            {STATUS_LABELS[status] || status}
+                        </Tag>
+                        {!isCancelled && !isDelivered && nextStatus && (
+                            <Button
+                                type="primary"
+                                size="small"
+                                onClick={() => handleStatusChange(record.id, nextStatus)}
+                                style={{
+                                    background: nextStatus === "CONFIRMED" ? "#52c41a" :
+                                                nextStatus === "DELIVERING" ? "#faad14" :
+                                                nextStatus === "DELIVERED" ? "#1890ff" : "#C8A97E",
+                                    borderColor: nextStatus === "CONFIRMED" ? "#52c41a" :
+                                                nextStatus === "DELIVERING" ? "#faad14" :
+                                                nextStatus === "DELIVERED" ? "#1890ff" : "#C8A97E",
+                                }}
+                            >
+                                {nextStatus === "CONFIRMED" ? "Xác nhận" :
+                                 nextStatus === "DELIVERING" ? "Đang giao" :
+                                 nextStatus === "DELIVERED" ? "Đã giao" : ""}
+                            </Button>
+                        )}
+                    </Space>
+                );
+            },
         },
         {
             title: "Chi tiết",

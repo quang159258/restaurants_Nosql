@@ -319,6 +319,16 @@ const TableDish = () => {
             ),
         },
         {
+            title: "Đã bán hôm nay",
+            dataIndex: "soldToday",
+            key: "soldToday",
+            render: (sold) => (
+                <Tag color="purple" style={{ fontSize: 14, padding: "4px 12px" }}>
+                    {sold || 0}
+                </Tag>
+            ),
+        },
+        {
             title: "Danh mục",
             dataIndex: "category",
             key: "category",

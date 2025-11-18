@@ -86,17 +86,12 @@ const LayoutStaff = () => {
                 <Menu
                     theme="light"
                     mode="inline"
-                    defaultSelectedKeys={['1']}
+                    defaultSelectedKeys={['2']}
                     items={[
-                        {
-                            key: '1',
-                            icon: <HomeOutlined />,
-                            label: <Link to="/staff">Dashboard</Link>,
-                        },
                         {
                             key: '2',
                             icon: <ShoppingCartOutlined />,
-                            label: <Link to="/staff/order">Orders</Link>,
+                            label: <Link to="/staff">Orders</Link>,
                         },
                         {
                             key: '3',

@@ -131,8 +131,10 @@ const logoutAllSessionsAPI = () => {
 const fetchAllDish = (page, size, type) => {
 
     let URL_BACKEND = `${DISH_BASE}?${buildPaginationParams(page, size)}`;
-    if (type && type !== 1 && type !== "all") {
-        URL_BACKEND += `&filter=category.id~'${type}'`;
+    // Chỉ filter khi type không phải "all" và có giá trị
+    if (type && type !== "all") {
+        // springfilter: sử dụng == cho so sánh bằng với số (category.id là Long)
+        URL_BACKEND += `&filter=category.id==${type}`;
     }
     return axios.get(URL_BACKEND);
 };

@@ -294,6 +294,8 @@ public class OrderService {
         res.setReceiverPhone(order.getReceiverPhone());
         res.setStatus(order.getStatus() != null ? order.getStatus().name() : null);
         res.setTotalPrice(order.getTotalPrice());
+        res.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
+        res.setPaymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
         return res;
     }
 
@@ -313,6 +315,13 @@ public class OrderService {
             try {
                 OrderStatus newStatus = OrderStatus.valueOf(status.toUpperCase());
                 order.setStatus(newStatus);
+                
+                // Nếu là COD (CASH) và đơn hàng được xác nhận, tự động đánh dấu đã thanh toán
+                if (PaymentMethod.CASH.equals(order.getPaymentMethod()) 
+                    && OrderStatus.CONFIRMED.equals(newStatus)
+                    && PaymentStatus.PAYMENT_UNPAID.equals(order.getPaymentStatus())) {
+                    order.setPaymentStatus(PaymentStatus.PAID);
+                }
             } catch (IllegalArgumentException ex) {
                 throw new OrderException("Invalid order status: " + status);
             }
@@ -325,6 +334,8 @@ public class OrderService {
         res.setReceiverPhone(order.getReceiverPhone());
         res.setStatus(order.getStatus() != null ? order.getStatus().name() : null);
         res.setTotalPrice(order.getTotalPrice());
+        res.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
+        res.setPaymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
         return res;
     }
 
