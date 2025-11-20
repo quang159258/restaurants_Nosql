@@ -93,4 +93,18 @@ public class GlobalException {
         res.setError(ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
     }
+
+    // Handler cho tất cả các exception khác (bao gồm springfilter errors)
+    @ExceptionHandler(value = {
+            Exception.class,
+    })
+    public ResponseEntity<RestResponse<Object>> handleGenericException(Exception ex) {
+        RestResponse<Object> res = new RestResponse<Object>();
+        res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        res.setError(ex.getMessage());
+        res.setMessage("Internal server error");
+        // Log full stack trace để debug
+        ex.printStackTrace();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(res);
+    }
 }

@@ -63,7 +63,38 @@ const ConfirmPage = () => {
 
     // Xử lý checkout
     const handleCheckOut = async () => {
-        if (!addressValue) {
+        // Validation: Kiểm tra cart có items không
+        if (!listItemCart || listItemCart.length === 0) {
+            addNotification("Giỏ hàng trống", "Vui lòng thêm sản phẩm vào giỏ hàng trước khi đặt hàng", "warning");
+            return;
+        }
+
+        // Validation: Kiểm tra thông tin bắt buộc
+        if (!name || name.trim() === "") {
+            addNotification("Thiếu thông tin", "Vui lòng nhập tên người nhận", "warning");
+            return;
+        }
+        if (!phone || phone.trim() === "") {
+            addNotification("Thiếu thông tin", "Vui lòng nhập số điện thoại", "warning");
+            return;
+        }
+        // Validate phone format (10-11 số)
+        const phoneRegex = /^[0-9]{10,11}$/;
+        if (!phoneRegex.test(phone.trim())) {
+            addNotification("Số điện thoại không hợp lệ", "Vui lòng nhập số điện thoại 10-11 chữ số", "warning");
+            return;
+        }
+        if (!email || email.trim() === "") {
+            addNotification("Thiếu thông tin", "Vui lòng nhập email", "warning");
+            return;
+        }
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            addNotification("Email không hợp lệ", "Vui lòng nhập email đúng định dạng", "warning");
+            return;
+        }
+        if (!addressValue || addressValue.trim() === "") {
             addNotification("Thiếu địa chỉ", "Vui lòng chọn đầy đủ địa chỉ giao hàng", "warning");
             return;
         }
@@ -72,19 +103,24 @@ const ConfirmPage = () => {
             return;
         }
         
+        // Prevent duplicate orders: Set loading state
+        setLoading(true);
+        
         // Nếu là COD, tạo order luôn
         if (paymentMethod === "CASH") {
             try {
                 const response = await checkOutCart(
-                    name,
-                    phone,
-                    addressValue,
-                    email,
+                    name.trim(),
+                    phone.trim(),
+                    addressValue.trim(),
+                    email.trim(),
                     paymentMethod
                 );
                 
                 if (response.status === 200) {
                     const orderData = response.data;
+                    // Refresh cart sau khi checkout thành công
+                    await fetchCart();
                     addNotification(
                         "Đặt hàng thành công!", 
                         "Đơn hàng của bạn đã được tạo. Vui lòng chờ xác nhận từ nhân viên.", 
@@ -98,16 +134,19 @@ const ConfirmPage = () => {
                 console.error("Error creating order:", error);
                 const serverMessage = error?.response?.data?.message || "Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại.";
                 addNotification("Lỗi", serverMessage, "error");
+            } finally {
+                setLoading(false);
             }
-        } else {
+        } else if (paymentMethod === "VNPAY") {
             // Nếu là VNPay, chuyển sang /payment
+            setLoading(false); // Reset loading vì chưa tạo order
             navigate("/payment", {
                 state: {
                     formData: {
-                        receiverName: name,
-                        receiverPhone: phone,
-                        receiverAddress: addressValue,
-                        receiverEmail: email,
+                        receiverName: name.trim(),
+                        receiverPhone: phone.trim(),
+                        receiverAddress: addressValue.trim(),
+                        receiverEmail: email.trim(),
                         paymentMethod
                     }
                 }
@@ -233,9 +272,14 @@ const ConfirmPage = () => {
                     <div className="text-center mt-6 ">
                         <button
                             onClick={handleCheckOut}
-                            className="bg-[#dfc094] text-white py-2 px-6 rounded transition hover:scale-105"
+                            disabled={loading || !listItemCart || listItemCart.length === 0}
+                            className={`bg-[#dfc094] text-white py-2 px-6 rounded transition hover:scale-105 ${
+                                loading || !listItemCart || listItemCart.length === 0 
+                                    ? "opacity-50 cursor-not-allowed" 
+                                    : ""
+                            }`}
                         >
-                            Thanh toán
+                            {loading ? "Đang xử lý..." : "Thanh toán"}
                         </button>
                     </div>
                 </div>

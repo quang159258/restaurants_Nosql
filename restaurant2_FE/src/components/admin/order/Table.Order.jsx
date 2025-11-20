@@ -214,6 +214,9 @@ const OrderTable = () => {
             title: "Ngày đặt",
             dataIndex: "date",
             key: "date",
+            sorter: (a, b) => new Date(a.date) - new Date(b.date),
+            sortDirections: ['descend', 'ascend'],
+            defaultSortOrder: 'descend',
             render: (date) => new Date(date).toLocaleString("vi-VN"),
         },
         {
@@ -224,12 +227,16 @@ const OrderTable = () => {
         },
         {
             title: "Thanh toán",
-            dataIndex: "paymentMethod",
-            key: "paymentMethod",
-            render: (method) => (
-                <Tag color={method === "CASH" ? "orange" : "blue"}>
-                    {method === "CASH" ? "💰 COD" : method === "VNPAY" ? "🏦 VNPay" : method || "N/A"}
-                </Tag>
+            key: "payment",
+            render: (_, record) => (
+                <Space direction="vertical" size="small">
+                    <Tag color={record.paymentMethod === "CASH" ? "orange" : "blue"}>
+                        {record.paymentMethod === "CASH" ? "💰 COD" : record.paymentMethod === "VNPAY" ? "🏦 VNPay" : record.paymentMethod || "N/A"}
+                    </Tag>
+                    <Tag color={record.paymentStatus === "PAID" ? "green" : record.paymentStatus === "PAYMENT_UNPAID" ? "red" : "default"}>
+                        {record.paymentStatus === "PAID" ? "✓ Đã thanh toán" : record.paymentStatus === "PAYMENT_UNPAID" ? "✗ Chưa thanh toán" : record.paymentStatus || "N/A"}
+                    </Tag>
+                </Space>
             ),
         },
         {
@@ -454,8 +461,24 @@ const OrderTable = () => {
                                                         selectedOrder.status === "DELIVERED" ? "#52c41a" : "red",
                                         fontWeight: 600
                                     }}>
-                                    {selectedOrder.status}
+                                    {selectedOrder.status === "PENDING" ? "Chờ xác nhận" :
+                                        selectedOrder.status === "CONFIRMED" ? "Đã xác nhận" :
+                                            selectedOrder.status === "DELIVERING" ? "Đang giao" :
+                                                selectedOrder.status === "DELIVERED" ? "Đã giao" :
+                                                    selectedOrder.status === "CANCELLED" ? "Đã hủy" : selectedOrder.status}
                                 </span>
+                            </p>
+                            <p>
+                                <strong>Phương thức thanh toán:</strong>{" "}
+                                <Tag color={selectedOrder.paymentMethod === "CASH" ? "orange" : "blue"}>
+                                    {selectedOrder.paymentMethod === "CASH" ? "💰 COD" : selectedOrder.paymentMethod === "VNPAY" ? "🏦 VNPay" : selectedOrder.paymentMethod || "N/A"}
+                                </Tag>
+                            </p>
+                            <p>
+                                <strong>Trạng thái thanh toán:</strong>{" "}
+                                <Tag color={selectedOrder.paymentStatus === "PAID" ? "green" : selectedOrder.paymentStatus === "PAYMENT_UNPAID" ? "red" : "default"}>
+                                    {selectedOrder.paymentStatus === "PAID" ? "✓ Đã thanh toán" : selectedOrder.paymentStatus === "PAYMENT_UNPAID" ? "✗ Chưa thanh toán" : selectedOrder.paymentStatus || "N/A"}
+                                </Tag>
                             </p>
                             <p><strong>Tổng tiền:</strong> <span style={{ color: '#d4380d', fontWeight: 'bold' }}>{selectedOrder.totalPrice.toLocaleString()} đ</span></p>
                         </div>

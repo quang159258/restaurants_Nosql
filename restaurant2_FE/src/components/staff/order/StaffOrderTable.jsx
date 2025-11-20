@@ -87,6 +87,9 @@ const StaffOrderTable = () => {
             title: "Ngày tạo",
             dataIndex: "date",
             key: "date",
+            sorter: (a, b) => new Date(a.date) - new Date(b.date),
+            sortDirections: ['descend', 'ascend'],
+            defaultSortOrder: 'descend',
             render: (date) => date ? new Date(date).toLocaleString("vi-VN") : "",
         },
         {
@@ -97,12 +100,16 @@ const StaffOrderTable = () => {
         },
         {
             title: "Thanh toán",
-            dataIndex: "paymentMethod",
-            key: "paymentMethod",
-            render: (method) => (
-                <Tag color={method === "CASH" ? "orange" : "blue"}>
-                    {method === "CASH" ? "💰 COD" : method === "VNPAY" ? "🏦 VNPay" : method || "N/A"}
-                </Tag>
+            key: "payment",
+            render: (_, record) => (
+                <Space direction="vertical" size="small">
+                    <Tag color={record.paymentMethod === "CASH" ? "orange" : "blue"}>
+                        {record.paymentMethod === "CASH" ? "💰 COD" : record.paymentMethod === "VNPAY" ? "🏦 VNPay" : record.paymentMethod || "N/A"}
+                    </Tag>
+                    <Tag color={record.paymentStatus === "PAID" ? "green" : record.paymentStatus === "PAYMENT_UNPAID" ? "red" : "default"}>
+                        {record.paymentStatus === "PAID" ? "✓ Đã thanh toán" : record.paymentStatus === "PAYMENT_UNPAID" ? "✗ Chưa thanh toán" : record.paymentStatus || "N/A"}
+                    </Tag>
+                </Space>
             ),
         },
         {
@@ -242,7 +249,19 @@ const StaffOrderTable = () => {
                         <div>
                             <Typography.Text strong>Trạng thái:</Typography.Text>{" "}
                             <Tag color={STATUS_COLORS[selectedOrder.status] || "default"}>
-                                {selectedOrder.status}
+                                {STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
+                            </Tag>
+                        </div>
+                        <div>
+                            <Typography.Text strong>Phương thức thanh toán:</Typography.Text>{" "}
+                            <Tag color={selectedOrder.paymentMethod === "CASH" ? "orange" : "blue"}>
+                                {selectedOrder.paymentMethod === "CASH" ? "💰 COD" : selectedOrder.paymentMethod === "VNPAY" ? "🏦 VNPay" : selectedOrder.paymentMethod || "N/A"}
+                            </Tag>
+                        </div>
+                        <div>
+                            <Typography.Text strong>Trạng thái thanh toán:</Typography.Text>{" "}
+                            <Tag color={selectedOrder.paymentStatus === "PAID" ? "green" : selectedOrder.paymentStatus === "PAYMENT_UNPAID" ? "red" : "default"}>
+                                {selectedOrder.paymentStatus === "PAID" ? "✓ Đã thanh toán" : selectedOrder.paymentStatus === "PAYMENT_UNPAID" ? "✗ Chưa thanh toán" : selectedOrder.paymentStatus || "N/A"}
                             </Tag>
                         </div>
                         <div>

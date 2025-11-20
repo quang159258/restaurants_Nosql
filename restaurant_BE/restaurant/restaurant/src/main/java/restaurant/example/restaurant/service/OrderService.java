@@ -1,7 +1,9 @@
 package restaurant.example.restaurant.service;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -197,11 +199,18 @@ public class OrderService {
 
     /** ✅ Lấy tất cả đơn hàng */
     public ResultPaginationDataDTO getAllOrders(Specification<Order> spec, Pageable pageable) {
-        Page<Order> pageOrder = this.orderRepository.findAll(spec, pageable);
+        // Thêm sort theo createdAt DESC (mới nhất trước) nếu chưa có sort
+        Pageable sortedPageable = pageable.getSort().isSorted() 
+            ? pageable 
+            : PageRequest.of(
+                pageable.getPageNumber(), 
+                pageable.getPageSize(), 
+                Sort.by(Sort.Direction.DESC, "createdAt")
+            );
+        
+        Page<Order> pageOrder = this.orderRepository.findAll(spec, sortedPageable);
         List<ResOrder> lstRes = new ArrayList<>();
         List<Order> lst = pageOrder.getContent();
-        // lst.sort(Comparator.comparing(Order::getCreatedAt,
-        // Comparator.nullsLast(Comparator.naturalOrder())));
 
         for (Order item : lst) {
             ResOrder res = new ResOrder();
@@ -212,6 +221,8 @@ public class OrderService {
             res.setStatus(item.getStatus() != null ? item.getStatus().name() : null);
             res.setTotalPrice(item.getTotalPrice());
             res.setDate(item.getCreatedAt());
+            res.setPaymentMethod(item.getPaymentMethod() != null ? item.getPaymentMethod().name() : null);
+            res.setPaymentStatus(item.getPaymentStatus() != null ? item.getPaymentStatus().name() : null);
             res.setListOrderItem(ListOrderItem(item.getId()));
             lstRes.add(res);
         }
@@ -241,8 +252,17 @@ public class OrderService {
         Specification<Order> userSpec = (root, query, cb) -> cb.equal(root.get("user").get("id"), user.getId());
         Specification<Order> finalSpec = (spec == null) ? userSpec : spec.and(userSpec);
 
+        // Thêm sort theo createdAt DESC (mới nhất trước) nếu chưa có sort
+        Pageable sortedPageable = pageable.getSort().isSorted() 
+            ? pageable 
+            : PageRequest.of(
+                pageable.getPageNumber(), 
+                pageable.getPageSize(), 
+                Sort.by(Sort.Direction.DESC, "createdAt")
+            );
+
         // Truy vấn phân trang
-        Page<Order> pageOrder = orderRepository.findAll(finalSpec, pageable);
+        Page<Order> pageOrder = orderRepository.findAll(finalSpec, sortedPageable);
 
         if (pageOrder.isEmpty()) {
             throw new OrderException("No orders found for this user");
@@ -259,6 +279,8 @@ public class OrderService {
             res.setStatus(item.getStatus() != null ? item.getStatus().name() : null);
             res.setTotalPrice(item.getTotalPrice());
             res.setDate(item.getCreatedAt());
+            res.setPaymentMethod(item.getPaymentMethod() != null ? item.getPaymentMethod().name() : null);
+            res.setPaymentStatus(item.getPaymentStatus() != null ? item.getPaymentStatus().name() : null);
             res.setListOrderItem(ListOrderItem(item.getId())); // bạn giữ nguyên phần này
             lstRes.add(res);
         }

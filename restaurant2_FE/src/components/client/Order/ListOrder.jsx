@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchAllOrdersMy, getImageUrl, createVnpayPaymentLink } from "../../../services/api.service";
-import { Modal, Space, Table, Button } from "antd";
+import { Modal, Space, Table, Button, Tag } from "antd";
 import { EyeOutlined } from "@ant-design/icons";
 
 const ListOrder = () => {
@@ -104,6 +104,9 @@ const ListOrder = () => {
             title: "Ngày đặt",
             dataIndex: "date",
             key: "date",
+            sorter: (a, b) => new Date(a.date) - new Date(b.date),
+            sortDirections: ['descend', 'ascend'],
+            defaultSortOrder: 'descend',
             render: (date) => new Date(date).toLocaleString("vi-VN"),
         },
         {
@@ -143,38 +146,17 @@ const ListOrder = () => {
         },
         {
             title: "Thanh toán",
-            dataIndex: "paymentMethod",
-            key: "paymentMethod",
-            render: (method) => (
-                <span className="font-medium">
-                    {method === "CASH" ? "💰 Tiền mặt" : "🏦 VNPay"}
-                </span>
+            key: "payment",
+            render: (_, record) => (
+                <Space direction="vertical" size="small">
+                    <Tag color={record.paymentMethod === "CASH" ? "orange" : "blue"}>
+                        {record.paymentMethod === "CASH" ? "💰 COD" : record.paymentMethod === "VNPAY" ? "🏦 VNPay" : record.paymentMethod || "N/A"}
+                    </Tag>
+                    <Tag color={record.paymentStatus === "PAID" ? "green" : record.paymentStatus === "PAYMENT_UNPAID" ? "red" : "default"}>
+                        {record.paymentStatus === "PAID" ? "✓ Đã thanh toán" : record.paymentStatus === "PAYMENT_UNPAID" ? "✗ Chưa thanh toán" : record.paymentStatus || "N/A"}
+                    </Tag>
+                </Space>
             ),
-        },
-        {
-            title: "Trạng thái TT",
-            dataIndex: "paymentStatus",
-            key: "paymentStatus",
-            render: (status) => {
-                const normalized = status === "PAYMENT_UNPAID" ? "UNPAID" : status;
-                const colorMap = {
-                    UNPAID: "text-red-500",
-                    PAID: "text-green-500",
-                    FAILED: "text-red-600",
-                };
-
-                const textMap = {
-                    UNPAID: "Chưa thanh toán",
-                    PAID: "Đã thanh toán",
-                    FAILED: "Thanh toán thất bại",
-                };
-
-                return (
-                    <span className={`font-medium ${colorMap[normalized] || "text-gray-500"}`}>
-                        {textMap[normalized] || normalized}
-                    </span>
-                );
-            },
         },
 
 
@@ -187,7 +169,7 @@ const ListOrder = () => {
                         <a onClick={() => handleView(record)}>
                             <EyeOutlined style={{ color: "#1890ff" }} />
                         </a>
-                        {record.paymentMethod === "VNPAY" && record.paymentStatus !== "PAID" && record.paymentStatus !== "FAILED" && (
+                        {record.paymentMethod === "VNPAY" && (record.paymentStatus === "PAYMENT_UNPAID" || record.paymentStatus === null) && (
                             <Button size="small" type="primary" onClick={() => handlePayOrder(record)}>
                                 Thanh toán
                             </Button>
@@ -334,12 +316,29 @@ const ListOrder = () => {
                                     color:
                                         selectedOrder.status === "PENDING" ? "#1890ff" :
                                             selectedOrder.status === "CONFIRMED" ? "green" :
-                                                selectedOrder.status === "DELIVERED" ? "#faad14" :
-                                                    "red",
+                                                selectedOrder.status === "DELIVERING" ? "#faad14" :
+                                                    selectedOrder.status === "DELIVERED" ? "#52c41a" :
+                                                        "red",
                                     fontWeight: 600
                                 }}>
-                                    {selectedOrder.status}
+                                    {selectedOrder.status === "PENDING" ? "Chờ xác nhận" :
+                                        selectedOrder.status === "CONFIRMED" ? "Đã xác nhận" :
+                                            selectedOrder.status === "DELIVERING" ? "Đang giao" :
+                                                selectedOrder.status === "DELIVERED" ? "Đã giao" :
+                                                    selectedOrder.status === "CANCELLED" ? "Đã hủy" : selectedOrder.status}
                                 </span>
+                            </p>
+                            <p>
+                                <strong>Phương thức thanh toán:</strong>{" "}
+                                <Tag color={selectedOrder.paymentMethod === "CASH" ? "orange" : "blue"}>
+                                    {selectedOrder.paymentMethod === "CASH" ? "💰 COD" : selectedOrder.paymentMethod === "VNPAY" ? "🏦 VNPay" : selectedOrder.paymentMethod || "N/A"}
+                                </Tag>
+                            </p>
+                            <p>
+                                <strong>Trạng thái thanh toán:</strong>{" "}
+                                <Tag color={selectedOrder.paymentStatus === "PAID" ? "green" : selectedOrder.paymentStatus === "PAYMENT_UNPAID" ? "red" : "default"}>
+                                    {selectedOrder.paymentStatus === "PAID" ? "✓ Đã thanh toán" : selectedOrder.paymentStatus === "PAYMENT_UNPAID" ? "✗ Chưa thanh toán" : selectedOrder.paymentStatus || "N/A"}
+                                </Tag>
                             </p>
                             <p><strong>Tổng tiền:</strong> <span style={{ color: '#d4380d', fontWeight: 'bold' }}>{selectedOrder.totalPrice.toLocaleString()} đ</span></p>
                         </div>

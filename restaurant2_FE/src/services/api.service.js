@@ -132,10 +132,14 @@ const fetchAllDish = (page, size, type) => {
 
     let URL_BACKEND = `${DISH_BASE}?${buildPaginationParams(page, size)}`;
     // Chỉ filter khi type không phải "all" và có giá trị
+    // Dùng query parameter categoryId thay vì filter để tránh lỗi với nested property
     if (type && type !== "all") {
-        // springfilter: sử dụng == cho so sánh bằng với số (category.id là Long)
-        URL_BACKEND += `&filter=category.id==${type}`;
+        const categoryId = Number(type);
+        if (!isNaN(categoryId)) {
+            URL_BACKEND += `&categoryId=${categoryId}`;
+        }
     }
+    console.log('Fetch dishes URL:', URL_BACKEND, 'type:', type);
     return axios.get(URL_BACKEND);
 };
 
@@ -285,9 +289,11 @@ const buildImageUrl = (fileName) => {
     const normalizedBase = baseUrl.endsWith("/")
         ? baseUrl.slice(0, -1)
         : baseUrl;
-    const normalizedPath = normalized.startsWith("/images") || normalized.startsWith("/files")
+    // Backend có static resource handler cho /storage/** và endpoint /images/{fileName}
+    // Ưu tiên dùng /storage/ vì đó là static resource handler
+    const normalizedPath = normalized.startsWith("/storage") || normalized.startsWith("/images") || normalized.startsWith("/files")
         ? normalized
-        : `/images/${normalized}`;
+        : `/storage/${normalized}`;
     const cleanedPath = normalizedPath.startsWith("/")
         ? normalizedPath
         : `/${normalizedPath}`;

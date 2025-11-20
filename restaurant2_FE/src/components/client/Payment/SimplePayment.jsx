@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { checkOutCart } from "../../../services/api.service";
+import { checkOutCart, getCart } from "../../../services/api.service";
+import { AuthContext } from "../../context/auth.context";
 import Notification from "../../noti/Notification";
 
 const SimplePayment = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { setCart } = useContext(AuthContext);
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(false);
     const [orderCreated, setOrderCreated] = useState(false);
@@ -27,26 +29,77 @@ const SimplePayment = () => {
             return;
         }
 
+        // SimplePayment chỉ dành cho VNPay, không xử lý CASH
+        if (formData.paymentMethod !== "VNPAY") {
+            addNotification("Lỗi", "Trang này chỉ dành cho thanh toán VNPay. Vui lòng quay lại trang xác nhận.", "error");
+            setTimeout(() => navigate("/confirm"), 2000);
+            return;
+        }
+
+        // Validation: Kiểm tra thông tin bắt buộc
+        if (!formData.receiverName || formData.receiverName.trim() === "") {
+            addNotification("Thiếu thông tin", "Vui lòng nhập tên người nhận", "warning");
+            return;
+        }
+        if (!formData.receiverPhone || formData.receiverPhone.trim() === "") {
+            addNotification("Thiếu thông tin", "Vui lòng nhập số điện thoại", "warning");
+            return;
+        }
+        const phoneRegex = /^[0-9]{10,11}$/;
+        if (!phoneRegex.test(formData.receiverPhone.trim())) {
+            addNotification("Số điện thoại không hợp lệ", "Vui lòng nhập số điện thoại 10-11 chữ số", "warning");
+            return;
+        }
+        if (!formData.receiverEmail || formData.receiverEmail.trim() === "") {
+            addNotification("Thiếu thông tin", "Vui lòng nhập email", "warning");
+            return;
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.receiverEmail.trim())) {
+            addNotification("Email không hợp lệ", "Vui lòng nhập email đúng định dạng", "warning");
+            return;
+        }
+        if (!formData.receiverAddress || formData.receiverAddress.trim() === "") {
+            addNotification("Thiếu địa chỉ", "Vui lòng chọn đầy đủ địa chỉ giao hàng", "warning");
+            return;
+        }
+
         setLoading(true);
         try {
             const response = await checkOutCart(
-                formData.receiverName,
-                formData.receiverPhone,
-                formData.receiverAddress,
-                formData.receiverEmail,
+                formData.receiverName.trim(),
+                formData.receiverPhone.trim(),
+                formData.receiverAddress.trim(),
+                formData.receiverEmail.trim(),
                 formData.paymentMethod
             );
 
             if (response.status === 200) {
-                const orderData = response.data;
+                const orderData = response.data || response;
                 setOrderCreated(true);
                 
-                if (formData.paymentMethod === "VNPAY" && orderData.paymentUrl) {
-                    // VNPay: Redirect to paymentUrl từ VNPayService
+                // Refresh cart sau khi checkout thành công (backend đã xóa cart)
+                try {
+                    const cartRes = await getCart();
+                    if (cartRes.data) {
+                        setCart(cartRes.data);
+                    }
+                } catch (error) {
+                    console.error("Không thể refresh cart:", error);
+                }
+                
+                // VNPay: Kiểm tra paymentUrl từ response
+                if (orderData.paymentUrl) {
+                    // Redirect to paymentUrl từ VNPayService
                     window.location.href = orderData.paymentUrl;
                 } else {
-                    // COD: Chỉ cần đặt đơn, redirect ngay về /order
-                    navigate("/order", { state: { orderId: orderData.orderId } });
+                    // Nếu không có paymentUrl, có thể VNPay chưa được cấu hình
+                    addNotification(
+                        "Lỗi", 
+                        "Không thể tạo liên kết thanh toán VNPay. Vui lòng thử lại hoặc chọn phương thức khác.", 
+                        "error"
+                    );
+                    setTimeout(() => navigate("/confirm"), 2000);
                 }
             }
         } catch (error) {
@@ -91,46 +144,32 @@ const SimplePayment = () => {
                         <p><span className="font-medium">Số điện thoại:</span> {formData.receiverPhone}</p>
                         <p><span className="font-medium">Email:</span> {formData.receiverEmail}</p>
                         <p><span className="font-medium">Địa chỉ:</span> {formData.receiverAddress}</p>
-                        <p><span className="font-medium">Phương thức thanh toán:</span> 
-                            {formData.paymentMethod === "CASH" ? " 💰 Tiền mặt" : " 🏦 VNPay"}
-                        </p>
+                        <p><span className="font-medium">Phương thức thanh toán:</span> 🏦 VNPay</p>
                     </div>
                 </div>
 
                 {/* Thông báo phương thức thanh toán */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                    {formData.paymentMethod === "CASH" ? (
-                        <div className="text-blue-800">
-                            <p className="font-medium">💰 Thanh toán tiền mặt</p>
-                            <p className="text-sm mt-1">
-                                Bạn sẽ thanh toán khi nhận hàng. Nhân viên sẽ xác nhận thanh toán sau khi giao hàng.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="text-green-800">
-                            <p className="font-medium">🏦 Thanh toán VNPay</p>
-                            <p className="text-sm mt-1">
-                                Bạn sẽ được chuyển hướng đến trang thanh toán VNPay để hoàn tất giao dịch.
-                            </p>
-                        </div>
-                    )}
+                <div className="mb-6 p-4 bg-green-50 rounded-lg">
+                    <div className="text-green-800">
+                        <p className="font-medium">🏦 Thanh toán VNPay</p>
+                        <p className="text-sm mt-1">
+                            Bạn sẽ được chuyển hướng đến trang thanh toán VNPay để hoàn tất giao dịch.
+                        </p>
+                    </div>
                 </div>
 
                 {/* Buttons */}
                 <div className="space-y-3">
                     <button
                         onClick={handlePayment}
-                        disabled={loading}
+                        disabled={loading || formData.paymentMethod !== "VNPAY"}
                         className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-                            loading 
+                            loading || formData.paymentMethod !== "VNPAY"
                                 ? "bg-gray-400 cursor-not-allowed" 
-                                : formData.paymentMethod === "CASH"
-                                    ? "bg-green-500 hover:bg-green-600 text-white"
-                                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                                : "bg-blue-500 hover:bg-blue-600 text-white"
                         }`}
                     >
-                        {loading ? "Đang xử lý..." : 
-                         formData.paymentMethod === "CASH" ? "Xác nhận đặt hàng" : "Thanh toán VNPay"}
+                        {loading ? "Đang xử lý..." : "Thanh toán VNPay"}
                     </button>
                     
                     <button
