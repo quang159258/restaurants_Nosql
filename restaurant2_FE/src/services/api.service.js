@@ -128,6 +128,27 @@ const logoutAllSessionsAPI = () => {
     return axios.post(`${AUTH_BASE}/logout-all`);
 };
 
+const getSessionsAPI = () => {
+    return axios.get(`${AUTH_BASE}/sessions`);
+};
+
+const logoutSessionAPI = (sessionId) => {
+    return axios.delete(`${AUTH_BASE}/sessions/${sessionId}`);
+};
+
+// Admin APIs for managing user sessions
+const getAdminUserSessionsAPI = (userId) => {
+    return axios.get(`${USER_BASE}/admin/users/${userId}/sessions`);
+};
+
+const logoutAdminUserSessionAPI = (userId, sessionId) => {
+    return axios.delete(`${USER_BASE}/admin/users/${userId}/sessions/${sessionId}`);
+};
+
+const logoutAllAdminUserSessionsAPI = (userId) => {
+    return axios.delete(`${USER_BASE}/admin/users/${userId}/sessions`);
+};
+
 const fetchAllDish = (page, size, type) => {
 
     let URL_BACKEND = `${DISH_BASE}?${buildPaginationParams(page, size)}`;
@@ -437,7 +458,8 @@ const deleteRole = (id) => {
 export {
     createUserApi, fetchAllUserAPI, updateUserApi,
     deleteUserAPI, handleUploadFile, updateUserAvatarApi,
-    registerUserApi, loginApi, getAccountAPI, logoutAPI, logoutAllSessionsAPI,
+    registerUserApi, loginApi, getAccountAPI, logoutAPI, logoutAllSessionsAPI, getSessionsAPI, logoutSessionAPI,
+    getAdminUserSessionsAPI, logoutAdminUserSessionAPI, logoutAllAdminUserSessionsAPI,
     fetchAllCategories,
     fetchCategoryById,
     createCategory,

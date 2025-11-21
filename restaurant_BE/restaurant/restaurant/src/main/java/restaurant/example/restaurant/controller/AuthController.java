@@ -38,6 +38,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+import java.util.List;
+import restaurant.example.restaurant.domain.response.ResSessionInfoDTO;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -299,6 +305,46 @@ public class AuthController {
         }
         currentUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
         this.userService.saveUser(currentUser);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/auth/sessions")
+    @ApiMessage("Get all sessions for current user")
+    public ResponseEntity<List<ResSessionInfoDTO>> getMySessions(
+            @CookieValue(name = "SESSIONID", required = false) String currentSessionId) throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin().orElse("");
+        if (email.isEmpty()) {
+            throw new IdInvalidException("Không xác định được người dùng hiện tại");
+        }
+        User currentUser = this.userService.handelGetUserByUsername(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Tài khoản không tồn tại");
+        }
+        
+        // User chỉ có thể xem sessions của chính mình
+        List<ResSessionInfoDTO> sessions = sessionService.getUserSessions(currentUser.getId(), currentSessionId);
+        return ResponseEntity.ok(sessions);
+    }
+
+    @DeleteMapping("/auth/sessions/{sessionId}")
+    @ApiMessage("Logout a specific session of current user")
+    public ResponseEntity<Void> logoutSession(
+            @PathVariable String sessionId) throws IdInvalidException {
+        String email = SecurityUtil.getCurrentUserLogin().orElse("");
+        if (email.isEmpty()) {
+            throw new IdInvalidException("Không xác định được người dùng hiện tại");
+        }
+        User currentUser = this.userService.handelGetUserByUsername(email);
+        if (currentUser == null) {
+            throw new IdInvalidException("Tài khoản không tồn tại");
+        }
+        
+        // User chỉ có thể logout sessions của chính mình
+        boolean deleted = sessionService.deleteUserSession(currentUser.getId(), sessionId);
+        if (!deleted) {
+            throw new IdInvalidException("Session không tồn tại hoặc không thuộc về bạn");
+        }
+        
         return ResponseEntity.ok().build();
     }
 }

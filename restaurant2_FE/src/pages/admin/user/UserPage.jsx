@@ -1,7 +1,8 @@
 import React from "react";
-import { Card, Typography, Space, Button } from "antd";
+import { Card, Typography, Space, Button, Divider } from "antd";
 import { UserOutlined, ReloadOutlined } from "@ant-design/icons";
 import UserTable from "../../../components/admin/user/Table.User";
+import AdminDeviceManagement from "../../../components/admin/user/AdminDeviceManagement";
 
 const { Title } = Typography;
 
@@ -24,6 +25,12 @@ const UserPageAdmin = () => {
                     </Space>
                 </div>
                 <UserTable />
+            </Card>
+            
+            <Divider />
+            
+            <Card>
+                <AdminDeviceManagement />
             </Card>
         </div>
     );

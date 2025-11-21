@@ -113,6 +113,16 @@ public class DatabaseInitializer implements CommandLineRunner {
             permissions.add(new Permission("Update inventory stock", "/api/v1/inventory/stock/{dishId}", "PUT", "INVENTORY"));
             permissions.add(new Permission("Import inventory stock", "/api/v1/inventory/import/{dishId}", "POST", "INVENTORY"));
             permissions.add(new Permission("Get inventory info", "/api/v1/inventory/stock/{dishId}", "GET", "INVENTORY"));
+
+            // SESSION MANAGEMENT
+            permissions.add(new Permission("Get own sessions", "/api/v1/auth/sessions", "GET", "SESSION"));
+            permissions.add(new Permission("Logout own session", "/api/v1/auth/sessions/{sessionId}", "DELETE", "SESSION"));
+            
+            // ADMIN SESSION MANAGEMENT
+            permissions.add(new Permission("Get user sessions (Admin)", "/admin/users/{userId}/sessions", "GET", "SESSION"));
+            permissions.add(new Permission("Logout user session (Admin)", "/admin/users/{userId}/sessions/{sessionId}", "DELETE", "SESSION"));
+            permissions.add(new Permission("Logout all user sessions (Admin)", "/admin/users/{userId}/sessions", "DELETE", "SESSION"));
+            
             this.permissionRepository.saveAll(permissions);
         }
 

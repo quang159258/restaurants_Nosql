@@ -15,6 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import restaurant.example.restaurant.service.dto.UserSessionData;
+import restaurant.example.restaurant.domain.response.ResSessionInfoDTO;
+
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 @Service
 public class SessionService {
@@ -77,6 +81,84 @@ public class SessionService {
     public boolean isSessionValidForUser(Long userId, String sessionId) {
         UserSessionData data = getSessionData(sessionId);
         return data != null && userId != null && userId.equals(data.getUserId());
+    }
+
+    
+    public List<ResSessionInfoDTO> getUserSessions(Long userId, String currentSessionId) {
+        List<ResSessionInfoDTO> sessions = new ArrayList<>();
+        String key = userSessionsKey(userId);
+        List<String> sessionIds = stringRedisTemplate.opsForList().range(key, 0, -1);
+        
+        if (CollectionUtils.isEmpty(sessionIds)) {
+            return sessions;
+        }
+        
+        for (String sessionId : sessionIds) {
+            UserSessionData data = getSessionData(sessionId);
+            if (data != null && data.getUserId().equals(userId)) {
+                ResSessionInfoDTO sessionInfo = new ResSessionInfoDTO();
+                sessionInfo.setSessionId(sessionId);
+                sessionInfo.setClientIp(data.getClientIp());
+                sessionInfo.setUserAgent(data.getUserAgent());
+                sessionInfo.setDeviceInfo(parseUserAgent(data.getUserAgent()));
+                sessionInfo.setLocation("Unknown"); // Có thể tích hợp IP geolocation service
+                sessionInfo.setCreatedAt(data.getCreatedAt());
+                sessionInfo.setLastAccessAt(data.getLastAccessAt());
+                sessionInfo.setCurrent(sessionId.equals(currentSessionId));
+                sessions.add(sessionInfo);
+            }
+        }
+        
+        return sessions;
+    }
+
+    public boolean deleteUserSession(Long userId, String sessionId) {
+        UserSessionData data = getSessionData(sessionId);
+        if (data != null && data.getUserId().equals(userId)) {
+            deleteSessionInternal(sessionId, true);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Parse user agent string để lấy thông tin browser và OS
+     */
+    private String parseUserAgent(String userAgent) {
+        if (userAgent == null || userAgent.isEmpty()) {
+            return "Unknown Device";
+        }
+        
+        String browser = "Unknown Browser";
+        String os = "Unknown OS";
+        
+        // Detect Browser
+        if (userAgent.contains("Chrome") && !userAgent.contains("Edg")) {
+            browser = "Chrome";
+        } else if (userAgent.contains("Firefox")) {
+            browser = "Firefox";
+        } else if (userAgent.contains("Safari") && !userAgent.contains("Chrome")) {
+            browser = "Safari";
+        } else if (userAgent.contains("Edg")) {
+            browser = "Edge";
+        } else if (userAgent.contains("Opera") || userAgent.contains("OPR")) {
+            browser = "Opera";
+        }
+        
+        // Detect OS
+        if (userAgent.contains("Windows")) {
+            os = "Windows";
+        } else if (userAgent.contains("Mac")) {
+            os = "macOS";
+        } else if (userAgent.contains("Linux")) {
+            os = "Linux";
+        } else if (userAgent.contains("Android")) {
+            os = "Android";
+        } else if (userAgent.contains("iOS") || userAgent.contains("iPhone") || userAgent.contains("iPad")) {
+            os = "iOS";
+        }
+        
+        return String.format("%s on %s", browser, os);
     }
 
     private void registerSessionForUser(Long userId, String sessionId) {

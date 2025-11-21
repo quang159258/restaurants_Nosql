@@ -10,8 +10,15 @@ import { AuthContext } from '../../context/auth.context';
 import Notification from '../../noti/Notification';
 import { handleUploadFile, updateUserApi, changePassword } from '../../../services/api.service';
 import AddressSelector from '../../common/AddressSelector';
+import DeviceList from '../DeviceManagement/DeviceList';
 
 const { Option } = Select;
+
+// Helper function to normalize role
+const normalizeRole = (role) => {
+    if (typeof role === "string") return role;
+    return role?.name || "";
+};
 
 export const InfoPage = () => {
     const { user, setUser } = useContext(AuthContext);
@@ -258,6 +265,13 @@ export const InfoPage = () => {
                         >
                             Đổi mật khẩu
                         </Button>
+                    </div>
+
+                    <Divider />
+
+                    {/* Device Management - All users can see their own sessions */}
+                    <div className="mt-4">
+                        <DeviceList />
                     </div>
                 </form>
             </div>
