@@ -5,6 +5,9 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -22,6 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import restaurant.example.restaurant.service.SessionService;
 
 public class SessionValidationFilter extends OncePerRequestFilter {
+    private static final Logger log = LoggerFactory.getLogger(SessionValidationFilter.class);
 
     private static final String SESSION_COOKIE_NAME = "SESSIONID";
     private static final Set<String> IGNORED_PATHS = new HashSet<>(
@@ -57,9 +61,17 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            if (sessionService.getUserIdFromSession(sessionId) == null) {
-                response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                response.getWriter().write("SESSION_EXPIRED");
+            try {
+                if (sessionService.getUserIdFromSession(sessionId) == null) {
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.getWriter().write("SESSION_EXPIRED");
+                    return;
+                }
+            } catch (Exception e) {
+                // Redis down - fail closed: deny access for security
+                log.error("Redis unavailable during session validation, denying access for session: {}", sessionId, e);
+                response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+                response.getWriter().write("SESSION_SERVICE_UNAVAILABLE");
                 return;
             }
         }

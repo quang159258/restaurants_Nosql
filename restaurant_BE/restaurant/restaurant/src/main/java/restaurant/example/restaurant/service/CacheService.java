@@ -1,5 +1,7 @@
 package restaurant.example.restaurant.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -12,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class CacheService {
+    private static final Logger log = LoggerFactory.getLogger(CacheService.class);
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -40,8 +43,12 @@ public class CacheService {
      * Cache a single object
      */
     public void cacheObject(String key, Object value, long duration) {
-        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-        ops.set(key, value, Duration.ofSeconds(duration));
+        try {
+            ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+            ops.set(key, value, Duration.ofSeconds(duration));
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping cache for key: {}", key, e);
+        }
     }
     
     /**
@@ -55,24 +62,37 @@ public class CacheService {
      * Get cached object
      */
     public Object getCachedObject(String key) {
-        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-        return ops.get(key);
+        try {
+            ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+            return ops.get(key);
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot get cache for key: {}", key, e);
+            return null;
+        }
     }
     
     /**
      * Delete cached object
      */
     public void deleteCachedObject(String key) {
-        redisTemplate.delete(key);
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot delete cache for key: {}", key, e);
+        }
     }
     
     /**
      * Delete multiple cached objects by pattern
      */
     public void deleteCachedObjectsByPattern(String pattern) {
-        Set<String> keys = redisTemplate.keys(pattern);
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
+        try {
+            Set<String> keys = redisTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot delete cache by pattern: {}", pattern, e);
         }
     }
     
@@ -80,14 +100,24 @@ public class CacheService {
      * Check if key exists in cache
      */
     public boolean hasKey(String key) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot check key: {}", key, e);
+            return false;
+        }
     }
     
     /**
      * Get TTL (Time To Live) of a key
      */
     public long getTTL(String key) {
-        return redisTemplate.getExpire(key, TimeUnit.SECONDS);
+        try {
+            return redisTemplate.getExpire(key, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot get TTL for key: {}", key, e);
+            return -1;
+        }
     }
     
     // Dish cache methods
@@ -211,11 +241,20 @@ public class CacheService {
     
     // Clear all cache
     public void clearAllCache() {
-        redisTemplate.getConnectionFactory().getConnection().flushAll();
+        try {
+            redisTemplate.getConnectionFactory().getConnection().flushAll();
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot clear cache", e);
+        }
     }
     
     // Get cache statistics
     public long getCacheSize() {
-        return redisTemplate.getConnectionFactory().getConnection().dbSize();
+        try {
+            return redisTemplate.getConnectionFactory().getConnection().dbSize();
+        } catch (Exception e) {
+            log.warn("Redis unavailable, cannot get cache size", e);
+            return 0;
+        }
     }
 }

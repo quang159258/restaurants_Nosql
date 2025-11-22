@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -23,6 +25,7 @@ import restaurant.example.restaurant.util.error.CartException;
 
 @Service
 public class CartService {
+    private static final Logger log = LoggerFactory.getLogger(CartService.class);
 
     private final UserService userService;
     private final UserRepository userRepository;
@@ -50,11 +53,17 @@ public class CartService {
 
     public Cart getCartByUserId(Long userId) {
         String redisKey = buildCartKey(userId);
-        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-        Object obj = ops.get(redisKey);
-        if (obj instanceof Cart) {
-            return (Cart) obj;
+        try {
+            ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+            Object obj = ops.get(redisKey);
+            if (obj instanceof Cart) {
+                return (Cart) obj;
+            }
+        } catch (Exception e) {
+            log.warn("Redis unavailable, falling back to database for cart: {}", userId, e);
         }
+        
+        // Fallback to database
         Cart cart = this.cartRepository.findByUserId(userId).orElseGet(() -> {
             Cart newCart = new Cart();
             User user = this.userRepository.findById(userId)
@@ -62,12 +71,24 @@ public class CartService {
             newCart.setUser(user);
             return this.cartRepository.save(newCart);
         });
-        ops.set(redisKey, cart, Duration.ofSeconds(CART_SESSION_DURATION));
+        
+        // Try to cache, but don't fail if Redis is down
+        try {
+            ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+            ops.set(redisKey, cart, Duration.ofSeconds(CART_SESSION_DURATION));
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping cache for cart: {}", userId, e);
+        }
+        
         return cart;
     }
 
     public void evictCartCache(Long userId) {
-        redisTemplate.delete(buildCartKey(userId));
+        try {
+            redisTemplate.delete(buildCartKey(userId));
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping cache eviction for cart: {}", userId, e);
+        }
     }
 
     public ResCartItem addToCart(CartDetail request, String email) {
@@ -117,8 +138,12 @@ public class CartService {
         res.setImageUrl(ImageUtils.extractPrimaryImage(detail.getDish().getImageUrl()));
         res.setCategoryName(detail.getDish().getCategory().getName());
         // Sau khi cập nhật cart => đẩy vào Redis
-        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-        ops.set(buildCartKey(user.getId()), cart, Duration.ofSeconds(CART_SESSION_DURATION));
+        try {
+            ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+            ops.set(buildCartKey(user.getId()), cart, Duration.ofSeconds(CART_SESSION_DURATION));
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping cache for cart: {}", user.getId(), e);
+        }
         return res;
 
     }
