@@ -9,7 +9,8 @@ import {
     ShoppingCartOutlined,
     TagsOutlined,
     TeamOutlined,
-    UserOutlined
+    UserOutlined,
+    GlobalOutlined
 } from "@ant-design/icons";
 import { Avatar, Button, Dropdown, Layout, Menu, Space, Typography, theme } from "antd";
 import NotificationCenter from "../noti/NotificationCenter";
@@ -76,6 +77,11 @@ const LayoutAdmin = () => {
                 key: "/admin/role-permission",
                 icon: <SafetyOutlined />,
                 label: <Link to="/admin/role-permission">Vai trò & Quyền</Link>,
+            },
+            {
+                key: "/admin/sessions",
+                icon: <GlobalOutlined />,
+                label: <Link to="/admin/sessions">Quản lý phiên đăng nhập</Link>,
             },
         ],
         []

@@ -122,6 +122,20 @@ public class SessionService {
     }
 
     /**
+     * Delete session by sessionId (for admin use - no userId check)
+     * @param sessionId The session ID to delete
+     * @return true if session was deleted, false if session doesn't exist
+     */
+    public boolean deleteSessionByAdmin(String sessionId) {
+        UserSessionData data = getSessionData(sessionId);
+        if (data != null) {
+            deleteSessionInternal(sessionId, true);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Parse user agent string để lấy thông tin browser và OS
      */
     private String parseUserAgent(String userAgent) {

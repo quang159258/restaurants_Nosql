@@ -124,6 +124,20 @@ public class DatabaseInitializer implements CommandLineRunner {
             permissions.add(new Permission("Logout all user sessions (Admin)", "/admin/users/{userId}/sessions", "DELETE", "SESSION"));
             
             this.permissionRepository.saveAll(permissions);
+        } else {
+            // Nếu đã có permissions, chỉ thêm các permissions mới cho admin sessions
+            List<Permission> newAdminSessionPermissions = new ArrayList<>();
+            newAdminSessionPermissions.add(new Permission("Get user sessions (Admin)", "/admin/users/{userId}/sessions", "GET", "SESSION"));
+            newAdminSessionPermissions.add(new Permission("Logout user session (Admin)", "/admin/users/{userId}/sessions/{sessionId}", "DELETE", "SESSION"));
+            newAdminSessionPermissions.add(new Permission("Logout all user sessions (Admin)", "/admin/users/{userId}/sessions", "DELETE", "SESSION"));
+            
+            for (Permission perm : newAdminSessionPermissions) {
+                Permission existing = permissionRepository.findByApiPathAndMethod(perm.getApiPath(), perm.getMethod());
+                if (existing == null) {
+                    permissionRepository.save(perm);
+                    System.out.println(">>> Added new permission: " + perm.getApiPath() + " " + perm.getMethod());
+                }
+            }
         }
 
         if (countRoles == 0) {
@@ -180,6 +194,15 @@ public class DatabaseInitializer implements CommandLineRunner {
             staffRole.setDescription("Nhân viên quản lý đơn hàng và nhập kho");
             staffRole.setPermissions(staffPermissions);
             this.roleRepository.save(staffRole);
+        } else {
+            // Cập nhật SUPER_ADMIN role với tất cả permissions (bao gồm permissions mới)
+            Role adminRole = this.roleRepository.findByName("SUPER_ADMIN");
+            if (adminRole != null) {
+                List<Permission> allPermissions = this.permissionRepository.findAll();
+                adminRole.setPermissions(allPermissions);
+                this.roleRepository.save(adminRole);
+                System.out.println(">>> Updated SUPER_ADMIN role with all permissions (including new admin session permissions)");
+            }
         }
 
         if (countUsers == 0) {

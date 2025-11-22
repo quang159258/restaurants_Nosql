@@ -31,7 +31,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import restaurant.example.restaurant.service.SessionService;
 import restaurant.example.restaurant.domain.response.ResSessionInfoDTO;
@@ -122,7 +121,6 @@ public class UserController {
     // Admin: Get sessions of a specific user
     @GetMapping("/admin/users/{userId}/sessions")
     @ApiMessage("Get all sessions for a specific user (Admin only)")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<ResSessionInfoDTO>> getUserSessions(
             @PathVariable Long userId,
             @CookieValue(name = "SESSIONID", required = false) String currentSessionId) throws IdInvalidException {
@@ -140,7 +138,6 @@ public class UserController {
     // Admin: Logout a specific session of a user
     @DeleteMapping("/admin/users/{userId}/sessions/{sessionId}")
     @ApiMessage("Logout a specific session of a user (Admin only)")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> logoutUserSession(
             @PathVariable Long userId,
             @PathVariable String sessionId) throws IdInvalidException {
@@ -151,9 +148,14 @@ public class UserController {
         }
         
         // Admin có thể logout sessions của bất kỳ user nào
+        // Kiểm tra session có tồn tại và thuộc về userId không
         boolean deleted = sessionService.deleteUserSession(userId, sessionId);
         if (!deleted) {
-            throw new IdInvalidException("Session không tồn tại hoặc không thuộc về user này");
+            // Nếu không match với userId, admin vẫn có thể xóa (có thể session thuộc user khác)
+            deleted = sessionService.deleteSessionByAdmin(sessionId);
+            if (!deleted) {
+                throw new IdInvalidException("Session không tồn tại");
+            }
         }
         
         return ResponseEntity.ok().build();
@@ -162,7 +164,6 @@ public class UserController {
     // Admin: Logout all sessions of a user
     @DeleteMapping("/admin/users/{userId}/sessions")
     @ApiMessage("Logout all sessions of a user (Admin only)")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> logoutAllUserSessions(
             @PathVariable Long userId) throws IdInvalidException {
         // Check if user exists

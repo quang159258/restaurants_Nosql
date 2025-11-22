@@ -138,28 +138,21 @@ const logoutSessionAPI = (sessionId) => {
 
 // Admin APIs for managing user sessions
 const getAdminUserSessionsAPI = (userId) => {
-    return axios.get(`${USER_BASE}/admin/users/${userId}/sessions`);
+    return axios.get(`/admin/users/${userId}/sessions`);
 };
 
 const logoutAdminUserSessionAPI = (userId, sessionId) => {
-    return axios.delete(`${USER_BASE}/admin/users/${userId}/sessions/${sessionId}`);
+    return axios.delete(`/admin/users/${userId}/sessions/${sessionId}`);
 };
 
 const logoutAllAdminUserSessionsAPI = (userId) => {
-    return axios.delete(`${USER_BASE}/admin/users/${userId}/sessions`);
+    return axios.delete(`/admin/users/${userId}/sessions`);
 };
 
 const fetchAllDish = (page, size, type) => {
 
     let URL_BACKEND = `${DISH_BASE}?${buildPaginationParams(page, size)}`;
-    // Chỉ filter khi type không phải "all" và có giá trị
-    // Dùng query parameter categoryId thay vì filter để tránh lỗi với nested property
-    if (type && type !== "all") {
-        const categoryId = Number(type);
-        if (!isNaN(categoryId)) {
-            URL_BACKEND += `&categoryId=${categoryId}`;
-        }
-    }
+    
     console.log('Fetch dishes URL:', URL_BACKEND, 'type:', type);
     return axios.get(URL_BACKEND);
 };

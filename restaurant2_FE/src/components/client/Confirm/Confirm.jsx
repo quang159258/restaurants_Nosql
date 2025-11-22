@@ -19,6 +19,7 @@ const ConfirmPage = () => {
     const [addressValue, setAddressValue] = useState(user.address || "");
     const [paymentMethod, setPaymentMethod] = useState("CASH");
     const [vnpayAvailable, setVnpayAvailable] = useState(true);
+    const [loading, setLoading] = useState(false);
 
     const addNotification = (message, description, type) => {
         const id = Date.now();

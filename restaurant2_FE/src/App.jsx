@@ -42,6 +42,7 @@ import PaymentPage from './pages/client/payment';
 import PaymentManagement from './pages/admin/PaymentManagement';
 import AnalysisPage from './pages/admin/analysis';
 import PaymentResult from './pages/client/payment/VNPayCallback';
+import SessionManagementPage from './pages/admin/SessionManagementPage';
 
 
 const LayoutClient = () => {
@@ -111,6 +112,7 @@ const App = () => {
         { path: "role-permission", element: <RolePermissionManagement /> },
         { path: "payment", element: <PaymentManagement /> },
         { path: "analysis", element: <AnalysisPage /> },
+        { path: "sessions", element: <SessionManagementPage /> },
       ],
     },
 

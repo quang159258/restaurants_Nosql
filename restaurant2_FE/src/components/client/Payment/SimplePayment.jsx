@@ -74,44 +74,56 @@ const SimplePayment = () => {
                 formData.paymentMethod
             );
 
-            if (response.status === 200) {
-                const orderData = response.data || response;
-                setOrderCreated(true);
-                
-                // Refresh cart sau khi checkout thành công (backend đã xóa cart)
-                try {
-                    const cartRes = await getCart();
-                    if (cartRes.data) {
-                        setCart(cartRes.data);
-                    }
-                } catch (error) {
-                    console.error("Không thể refresh cart:", error);
+            // Axios interceptor có thể unwrap response, nên cần check nhiều level
+            const orderData = response?.data?.data || response?.data || response;
+            
+            console.log("Checkout response:", response);
+            console.log("Order data:", orderData);
+            console.log("Payment URL:", orderData?.paymentUrl);
+            
+            setOrderCreated(true);
+            
+            // Refresh cart sau khi checkout thành công (backend đã xóa cart)
+            try {
+                const cartRes = await getCart();
+                const cartData = cartRes?.data?.data || cartRes?.data || cartRes;
+                if (cartData) {
+                    setCart(cartData);
                 }
-                
-                // VNPay: Kiểm tra paymentUrl từ response
-                if (orderData.paymentUrl) {
-                    // Redirect to paymentUrl từ VNPayService
-                    window.location.href = orderData.paymentUrl;
-                } else {
-                    // Nếu không có paymentUrl, có thể VNPay chưa được cấu hình
-                    addNotification(
-                        "Lỗi", 
-                        "Không thể tạo liên kết thanh toán VNPay. Vui lòng thử lại hoặc chọn phương thức khác.", 
-                        "error"
-                    );
-                    setTimeout(() => navigate("/confirm"), 2000);
-                }
+            } catch (error) {
+                console.error("Không thể refresh cart:", error);
+            }
+            
+            // VNPay: Kiểm tra paymentUrl từ response
+            const paymentUrl = orderData?.paymentUrl;
+            if (paymentUrl && typeof paymentUrl === 'string' && paymentUrl.trim() !== '') {
+                // Redirect to paymentUrl từ VNPayService
+                console.log("Redirecting to VNPay:", paymentUrl);
+                // Set loading false trước khi redirect
+                setLoading(false);
+                // Sử dụng window.location.replace để không lưu vào history
+                window.location.replace(paymentUrl);
+            } else {
+                // Nếu không có paymentUrl, có thể VNPay chưa được cấu hình
+                console.error("No payment URL in response:", orderData);
+                setLoading(false);
+                addNotification(
+                    "Lỗi", 
+                    "Không thể tạo liên kết thanh toán VNPay. Vui lòng thử lại hoặc chọn phương thức khác.", 
+                    "error"
+                );
+                setTimeout(() => navigate("/confirm"), 2000);
             }
         } catch (error) {
             console.error("Payment error:", error);
-            const serverMessage = error?.response?.data?.message || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.";
+            const errorData = error?.response?.data?.data || error?.response?.data || error?.response || error;
+            const serverMessage = errorData?.message || errorData?.error || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.";
+            setLoading(false);
             addNotification(
                 "Lỗi thanh toán", 
                 serverMessage, 
                 "error"
             );
-        } finally {
-            setLoading(false);
         }
     };
 
