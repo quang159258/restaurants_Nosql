@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <title>Restaurant Order</title>
+    <meta charset="UTF-8">
+</head>
+
+<body style="font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0;">
+    <table style="max-width: 800px; margin: 0 auto; background-color: white; border-radius: 8px; padding: 20px;">
+        <tr>
+            <td>
+                <h2 style="margin: 0; text-align: center; color: #ea1e30;">Cảm ơn bạn đã đặt hàng tại Restaurant!</h2>
+            </td>
+        </tr>
+
+        <!-- Thông tin đơn hàng -->
+        <tr>
+            <td style="padding-top: 20px;">
+                <h3>Thông tin đơn hàng</h3>
+                <p><b>Mã đơn:</b> <span th:text="${order.id}"></span></p>
+                <p><b>Tổng tiền:</b> <span
+                        th:text="${#numbers.formatDecimal(order.totalPrice,0,'COMMA',0,'POINT')}"></span> VND</p>
+                <p><b>Người nhận:</b> <span th:text="${order.receiverName}"></span></p>
+                <p><b>Địa chỉ:</b> <span th:text="${order.receiverAddress}"></span></p>
+                <p><b>SĐT:</b> <span th:text="${order.receiverPhone}"></span></p>
+                <p><b>Email:</b> <span th:text="${order.receiverEmail}"></span></p>
+                <p><b>Phương thức thanh toán:</b> <span th:text="${order.paymentMethod}"></span></p>
+            </td>
+        </tr>
+
+        <!-- Chi tiết món ăn -->
+        <tr>
+            <td style="padding-top: 20px;">
+                <h3>Chi tiết món ăn</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: #f0f0f0;">
+                            <th style="padding: 8px; border: 1px solid #ddd;">Hình ảnh</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Tên món</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Số lượng</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Đơn giá</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Thành tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="item : ${orderDetail}">
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                                <img th:src="${item.imageUrl}" alt="food"
+                                    style="width: 60px; height: 60px; border-radius: 4px;">
+                            </td>
+                            <td style="padding: 8px; border: 1px solid #ddd;" th:text="${item.name}"></td>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;"
+                                th:text="${item.quantity}"></td>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align: right;"
+                                th:text="${#numbers.formatDecimal(item.price,0,'COMMA',0,'POINT')}"></td>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align: right;"
+                                th:text="${#numbers.formatDecimal(item.total,0,'COMMA',0,'POINT')}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+
+        <!-- Tổng cộng -->
+        <tr>
+            <td style="padding-top: 20px; text-align: right;">
+                <h3>Tổng cộng: <span th:text="${#numbers.formatDecimal(order.totalPrice,0,'COMMA',0,'POINT')}"></span>
+                    VND</h3>
+            </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+            <td style="padding-top: 30px; text-align: center; font-size: 14px; color: gray;">
+                <p>Cảm ơn bạn đã tin tưởng và ủng hộ Restaurant!</p>
+                <p>Mọi thắc mắc vui lòng liên hệ <a href="mailto:support@restaurant.com">support@restaurant.com</a></p>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
