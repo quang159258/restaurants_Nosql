@@ -8,7 +8,7 @@ import bg1 from '../../../assets/img/bg_1.jpg.webp';
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../context/auth.context';
 import Notification from '../../noti/Notification';
-import { handleUploadFile, updateUserApi, changePassword } from '../../../services/api.service';
+import { handleUploadFile, updateUserApi, changePassword, getAccountAPI } from '../../../services/api.service';
 import AddressSelector from '../../common/AddressSelector';
 import DeviceList from '../DeviceManagement/DeviceList';
 
@@ -77,11 +77,15 @@ export const InfoPage = () => {
             }
 
             // Update avatar trong server và context
-            const res = await updateUserApi(user.id, userName, gender, phone, address, fileName);
-            if (res.data) {
+            // Note: Avatar is handled separately, not in updateUserApi
+            const res = await updateUserApi(user.id, userName, gender, phone, address);
+            if (res && res.data) {
+                // Fetch updated user info to get full user object
+                const accountRes = await getAccountAPI();
+                if (accountRes && accountRes.data) {
+                    setUser(accountRes.data);
+                }
                 addNotification("Cập nhật ảnh", "Ảnh đại diện đã được cập nhật", "success");
-                setUser(res.data);
-                // Avatar URL sẽ được cập nhật từ res.data hoặc từ getImageUrlFromFileName
             } else {
                 addNotification("Lỗi", "Không thể cập nhật avatar", "error");
             }
@@ -94,15 +98,24 @@ export const InfoPage = () => {
     };
 
     const handleSubmit = async () => {
-        const res = await updateUserApi(user.id, userName, gender, phone, address, avatarUrl);
-        if (res.data) {
-            addNotification("Cập nhật thành công", "Thông tin người dùng đã được cập nhật", "success");
-            setUser(res.data);
-            setTimeout(() => {
-                navigate("/");
-            }, 2000);
-        } else {
-            addNotification("Lỗi cập nhật", res.error || "Đã xảy ra lỗi", "error");
+        try {
+            const res = await updateUserApi(user.id, userName, gender, phone, address);
+            if (res && res.data) {
+                // Fetch updated user info to get full user object
+                const accountRes = await getAccountAPI();
+                if (accountRes && accountRes.data) {
+                    setUser(accountRes.data);
+                }
+                addNotification("Cập nhật thành công", "Thông tin người dùng đã được cập nhật", "success");
+                setTimeout(() => {
+                    navigate("/");
+                }, 2000);
+            } else {
+                addNotification("Lỗi cập nhật", res?.error || "Đã xảy ra lỗi", "error");
+            }
+        } catch (error) {
+            console.error("Update error:", error);
+            addNotification("Lỗi cập nhật", error?.response?.data?.message || "Đã xảy ra lỗi", "error");
         }
     };
 
@@ -121,7 +134,7 @@ export const InfoPage = () => {
         }
         try {
             setPasswordLoading(true);
-            await changePassword({ currentPassword, newPassword });
+            await changePassword({ currentPassword, newPassword, confirmPassword });
             addNotification("Thành công", "Đã đổi mật khẩu", "success");
             setCurrentPassword("");
             setNewPassword("");

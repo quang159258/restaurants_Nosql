@@ -7,14 +7,13 @@ import java.util.SortedMap;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.servlet.http.HttpServletRequest;
-import restaurant.example.restaurant.domain.Order;
-import restaurant.example.restaurant.repository.OrderRepository;
+import restaurant.example.restaurant.redis.model.Order;
+import restaurant.example.restaurant.redis.repository.OrderRepository;
 import restaurant.example.restaurant.service.VnpayService;
 import restaurant.example.restaurant.service.VnpayService.ValidationResult;
 import restaurant.example.restaurant.util.constant.OrderStatus;
@@ -33,7 +32,6 @@ public class PaymentGatewayController {
     }
 
     @GetMapping("/ipn")
-    @Transactional
     public ResponseEntity<Map<String, String>> ipn(HttpServletRequest request) {
         Map<String, String[]> parameterMap = request.getParameterMap();
         Map<String, String> readableParams = new HashMap<>();

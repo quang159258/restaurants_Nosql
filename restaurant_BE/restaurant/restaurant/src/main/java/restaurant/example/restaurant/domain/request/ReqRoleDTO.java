@@ -1,26 +1,25 @@
 package restaurant.example.restaurant.domain.request;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
 import java.util.List;
 
-import jakarta.validation.constraints.NotBlank;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class ReqRoleDTO {
-    private Long id;
+    private String id;
     
-    @NotBlank(message = "Name không được để trống")
+    @NotBlank(message = "Role name is required")
+    @Size(min = 3, max = 50, message = "Role name must be between 3 and 50 characters")
     private String name;
     
-    @NotBlank(message = "Description không được để trống")
+    @Size(max = 255, message = "Description must be less than 255 characters")
     private String description;
     
-    private List<Long> permissionIds;
+    @NotNull(message = "Permissions list cannot be null")
+    private List<String> permissionIds;
+    
+    private boolean active = true;
 }
-

@@ -1,17 +1,12 @@
 package restaurant.example.restaurant.domain.response;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class CheckoutResponse {
-    private Long orderId;
+    private String orderId;
     private String status;
+    private String paymentUrl;
+    private String message;
     private String paymentMethod;
-    private String paymentUrl; // nếu là VNPay thì set, còn COD thì null
 }

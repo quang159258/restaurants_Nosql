@@ -3,7 +3,7 @@ package restaurant.example.restaurant.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import restaurant.example.restaurant.domain.Dish;
+import restaurant.example.restaurant.redis.model.Dish;
 import restaurant.example.restaurant.service.DishService;
 import restaurant.example.restaurant.service.notification.NotificationAudience;
 import restaurant.example.restaurant.service.notification.NotificationMessage;
@@ -27,7 +27,7 @@ public class InventoryController {
      * Cập nhật tồn kho cho một sản phẩm
      */
     @PutMapping("/stock/{dishId}")
-    public ResponseEntity<?> updateStock(@PathVariable Long dishId, @RequestBody Map<String, Integer> request) {
+    public ResponseEntity<?> updateStock(@PathVariable String dishId, @RequestBody Map<String, Integer> request) {
         try {
             Integer newStock = request.get("stock");
             if (newStock == null || newStock < 0) {
@@ -66,7 +66,7 @@ public class InventoryController {
      * Nhập thêm hàng vào kho
      */
     @PostMapping("/import/{dishId}")
-    public ResponseEntity<?> importStock(@PathVariable Long dishId, @RequestBody Map<String, Integer> request) {
+    public ResponseEntity<?> importStock(@PathVariable String dishId, @RequestBody Map<String, Integer> request) {
         try {
             Integer importQuantity = request.get("quantity");
             if (importQuantity == null || importQuantity <= 0) {
@@ -104,7 +104,7 @@ public class InventoryController {
      * Lấy thông tin tồn kho của một sản phẩm
      */
     @GetMapping("/stock/{dishId}")
-    public ResponseEntity<?> getStock(@PathVariable Long dishId) {
+    public ResponseEntity<?> getStock(@PathVariable String dishId) {
         try {
             Optional<Dish> dishOpt = dishService.handleGetDishById(dishId);
             if (!dishOpt.isPresent()) {

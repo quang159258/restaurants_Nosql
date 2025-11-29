@@ -1,18 +1,16 @@
 package restaurant.example.restaurant.domain.response;
 
-import java.time.Instant;
+import lombok.Data;
+import java.time.LocalDateTime;
 
-import lombok.Getter;
-import lombok.Setter;
-import restaurant.example.restaurant.util.constant.GenderEnum;
-
-@Getter
-@Setter
+@Data
 public class ResUpdateUserDTO {
-    private long id;
+    private String id;
     private String username;
-    private GenderEnum gender;
-    private String address;
+    private String email;
+    private String fullName;
     private String phone;
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
+    private String gender;
+    private String address;
 }

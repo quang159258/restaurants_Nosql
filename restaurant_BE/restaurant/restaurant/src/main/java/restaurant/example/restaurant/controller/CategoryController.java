@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
-import restaurant.example.restaurant.domain.Category;
+import restaurant.example.restaurant.redis.model.Category;
 import restaurant.example.restaurant.service.CategoryService;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -38,10 +38,8 @@ public class CategoryController {
 
     // get by id
     @GetMapping("/category/{id}")
-    public ResponseEntity<Category> getCategoryById(@PathVariable("id") Long id) {
-        Category category = this.categoryService.handleGetByIdCategory(id).isPresent()
-                ? this.categoryService.handleGetByIdCategory(id).get()
-                : null;
+    public ResponseEntity<Category> getCategoryById(@PathVariable("id") String id) {
+        Category category = this.categoryService.handleGetByIdCategory(id).orElse(null);
         return ResponseEntity.ok().body(category);
     }
 
@@ -54,14 +52,14 @@ public class CategoryController {
 
     // update by id
     @PutMapping("/category/{id}")
-    public ResponseEntity<Category> updateCategory(@PathVariable("id") Long id, @RequestBody Category category) {
+    public ResponseEntity<Category> updateCategory(@PathVariable("id") String id, @RequestBody Category category) {
         category.setId(id);
         return ResponseEntity.ok().body(this.categoryService.handleUpdateCategory(category));
     }
 
     // delete by id
     @DeleteMapping("/category/{id}")
-    public ResponseEntity<Void> deleteCategoryById(@PathVariable("id") Long id) {
+    public ResponseEntity<Void> deleteCategoryById(@PathVariable("id") String id) {
         this.categoryService.handleDeleteCategory(id);
         return ResponseEntity.ok().body(null);
     }

@@ -1,42 +1,33 @@
 package restaurant.example.restaurant.domain.response;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class RestResponse<T> {
-    private int statusCode;
-    private String error;
-
-    // message có thể là string hoặc arrayList
-    private Object message;
+    private String status;
+    private String message;
     private T data;
-
-    public int getStatusCode() {
-        return statusCode;
+    private Integer statusCode;
+    private String error;
+    
+    public static <T> RestResponse<T> success(T data) {
+        RestResponse<T> response = new RestResponse<>("success", null, data, 200, null);
+        return response;
     }
-
-    public void setStatusCode(int statusCode) {
-        this.statusCode = statusCode;
+    
+    public static <T> RestResponse<T> error(String message) {
+        return new RestResponse<>("error", message, null, 500, message);
     }
-
-    public String getError() {
-        return error;
+    
+    public void setStatusCode(int code) {
+        this.statusCode = code;
     }
-
+    
     public void setError(String error) {
         this.error = error;
-    }
-
-    public Object getMessage() {
-        return message;
-    }
-
-    public void setMessage(Object message) {
-        this.message = message;
-    }
-
-    public T getData() {
-        return data;
-    }
-
-    public void setData(T data) {
-        this.data = data;
     }
 }

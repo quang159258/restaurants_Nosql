@@ -2,10 +2,8 @@ package restaurant.example.restaurant.controller;
 
 import org.springframework.web.bind.annotation.RestController;
 
-import com.turkraft.springfilter.boot.Filter;
-
 import jakarta.validation.Valid;
-import restaurant.example.restaurant.domain.User;
+import restaurant.example.restaurant.redis.model.User;
 import restaurant.example.restaurant.domain.response.ResCreateUserDTO;
 import restaurant.example.restaurant.domain.response.ResUpdateUserDTO;
 import restaurant.example.restaurant.domain.response.ResUserDTO;
@@ -18,7 +16,6 @@ import restaurant.example.restaurant.util.error.IdInvalidException;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -79,7 +76,7 @@ public class UserController {
     @GetMapping("/users/{id}")
     @ApiMessage("Get user by id ")
     public ResponseEntity<ResUserDTO> getUserById(@PathVariable("id") Long id) throws IdInvalidException {
-        User user = this.userService.handelGetUser(id);
+        User user = this.userService.handelGetUser(String.valueOf(id));
         if (user == null) {
             throw new IdInvalidException("Id không tồn tại");
         }
@@ -89,16 +86,15 @@ public class UserController {
     // get user
     @GetMapping("/users")
     @ApiMessage("fetch all users")
-    public ResponseEntity<ResultPaginationDataDTO> getAllUser(@Filter Specification<User> spec,
-            Pageable pageable) {
-        return ResponseEntity.status(HttpStatus.OK).body(this.userService.handelGetAllUser(spec, pageable));
+    public ResponseEntity<ResultPaginationDataDTO> getAllUser(Pageable pageable) {
+        return ResponseEntity.status(HttpStatus.OK).body(this.userService.handelGetAllUser(pageable));
     }
 
     // delete user
     @DeleteMapping("/users/{id}")
     @ApiMessage("Delete user")
     public ResponseEntity<Void> deleteUser(@PathVariable("id") Long id) throws IdInvalidException {
-        User currentUser = this.userService.handelGetUser(id);
+        User currentUser = this.userService.handelGetUser(String.valueOf(id));
         if (currentUser == null) {
             throw new IdInvalidException("User với id = " + id + " không tồn tại");
         }
@@ -122,7 +118,7 @@ public class UserController {
     @GetMapping("/admin/users/{userId}/sessions")
     @ApiMessage("Get all sessions for a specific user (Admin only)")
     public ResponseEntity<List<ResSessionInfoDTO>> getUserSessions(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             @CookieValue(name = "SESSIONID", required = false) String currentSessionId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
@@ -131,7 +127,7 @@ public class UserController {
         }
         
         // Admin có thể xem sessions của bất kỳ user nào
-        List<ResSessionInfoDTO> sessions = sessionService.getUserSessions(userId, currentSessionId);
+        List<ResSessionInfoDTO> sessions = sessionService.getUserSessions(targetUser.getId(), currentSessionId);
         return ResponseEntity.ok(sessions);
     }
 
@@ -139,7 +135,7 @@ public class UserController {
     @DeleteMapping("/admin/users/{userId}/sessions/{sessionId}")
     @ApiMessage("Logout a specific session of a user (Admin only)")
     public ResponseEntity<Void> logoutUserSession(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             @PathVariable String sessionId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
@@ -149,7 +145,7 @@ public class UserController {
         
         // Admin có thể logout sessions của bất kỳ user nào
         // Kiểm tra session có tồn tại và thuộc về userId không
-        boolean deleted = sessionService.deleteUserSession(userId, sessionId);
+        boolean deleted = sessionService.deleteUserSession(targetUser.getId(), sessionId);
         if (!deleted) {
             // Nếu không match với userId, admin vẫn có thể xóa (có thể session thuộc user khác)
             deleted = sessionService.deleteSessionByAdmin(sessionId);
@@ -165,7 +161,7 @@ public class UserController {
     @DeleteMapping("/admin/users/{userId}/sessions")
     @ApiMessage("Logout all sessions of a user (Admin only)")
     public ResponseEntity<Void> logoutAllUserSessions(
-            @PathVariable Long userId) throws IdInvalidException {
+            @PathVariable String userId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
         if (targetUser == null) {
@@ -173,7 +169,7 @@ public class UserController {
         }
         
         // Admin có thể logout tất cả sessions của bất kỳ user nào
-        sessionService.deleteAllSessionsForUser(userId);
+        sessionService.deleteAllSessionsForUser(targetUser.getId());
         return ResponseEntity.ok().build();
     }
 
@@ -181,7 +177,7 @@ public class UserController {
     @PostMapping("/admin/users/{userId}/sessions/{sessionId}/block")
     @ApiMessage("Block device from a session (Admin only)")
     public ResponseEntity<Void> blockUserDevice(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             @PathVariable String sessionId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
@@ -198,7 +194,7 @@ public class UserController {
     @DeleteMapping("/admin/users/{userId}/sessions/{sessionId}/block")
     @ApiMessage("Unblock device from a session (Admin only)")
     public ResponseEntity<Void> unblockUserDevice(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             @PathVariable String sessionId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
@@ -215,7 +211,7 @@ public class UserController {
     @GetMapping("/admin/users/{userId}/blocked-devices")
     @ApiMessage("Get all blocked devices for a user (Admin only)")
     public ResponseEntity<java.util.Set<String>> getBlockedDevices(
-            @PathVariable Long userId) throws IdInvalidException {
+            @PathVariable String userId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
         if (targetUser == null) {
@@ -223,7 +219,7 @@ public class UserController {
         }
         
         // Admin có thể xem blocked devices của bất kỳ user nào
-        java.util.Set<String> blockedDevices = sessionService.getBlockedDevices(userId);
+        java.util.Set<String> blockedDevices = sessionService.getBlockedDevices(targetUser.getId());
         return ResponseEntity.ok(blockedDevices);
     }
 
@@ -231,7 +227,7 @@ public class UserController {
     @DeleteMapping("/admin/users/{userId}/blocked-devices")
     @ApiMessage("Unblock all devices for a user (Admin only)")
     public ResponseEntity<Void> unblockAllDevices(
-            @PathVariable Long userId) throws IdInvalidException {
+            @PathVariable String userId) throws IdInvalidException {
         // Check if user exists
         User targetUser = this.userService.handelGetUser(userId);
         if (targetUser == null) {
@@ -239,7 +235,7 @@ public class UserController {
         }
         
         // Admin có thể unblock tất cả devices của bất kỳ user nào
-        sessionService.unblockAllDevices(userId);
+        sessionService.unblockAllDevices(targetUser.getId());
         return ResponseEntity.ok().build();
     }
 

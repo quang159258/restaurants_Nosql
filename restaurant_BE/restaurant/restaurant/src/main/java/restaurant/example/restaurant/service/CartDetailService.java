@@ -2,8 +2,8 @@ package restaurant.example.restaurant.service;
 
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.repository.CartDetailRepository;
-import restaurant.example.restaurant.repository.CartRepository;
+import restaurant.example.restaurant.redis.repository.CartDetailRepository;
+import restaurant.example.restaurant.redis.repository.CartRepository;
 
 @Service
 public class CartDetailService {
@@ -16,7 +16,7 @@ public class CartDetailService {
         this.cartRepository = cartRepository;
     }
 
-    public void handleDeleteByID(Long id) {
+    public void handleDeleteByID(String id) {
         this.cartDetailRepository.deleteById(id);
     }
 

@@ -1,7 +1,5 @@
 package restaurant.example.restaurant.controller;
 
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,13 +11,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
-import restaurant.example.restaurant.domain.Role;
+import org.springframework.data.domain.Pageable;
+import restaurant.example.restaurant.redis.model.Role;
 import restaurant.example.restaurant.domain.request.ReqRoleDTO;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
 import restaurant.example.restaurant.service.RoleService;
 import restaurant.example.restaurant.util.anotation.ApiMessage;
 import restaurant.example.restaurant.util.error.IdInvalidException;
-import com.turkraft.springfilter.boot.Filter;
 
 @RestController
 public class RoleController {
@@ -56,26 +54,25 @@ public class RoleController {
 
     @DeleteMapping("/roles/{id}")
     @ApiMessage("Delete a role")
-    public ResponseEntity<Void> delete(@PathVariable("id") long id) throws IdInvalidException {
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) throws IdInvalidException {
         // check id
-        if (this.roleService.fetchById(id) == null) {
+        if (this.roleService.fetchById(String.valueOf(id)) == null) {
             throw new IdInvalidException("Role với id = " + id + " không tồn tại");
         }
-        this.roleService.delete(id);
+        this.roleService.delete(String.valueOf(id));
         return ResponseEntity.ok().body(null);
     }
 
     @GetMapping("/roles")
     @ApiMessage("Fetch roles")
-    public ResponseEntity<ResultPaginationDataDTO> getPermissions(
-            @Filter Specification<Role> spec, Pageable pageable) {
-        return ResponseEntity.ok(this.roleService.getRoles(spec, pageable));
+    public ResponseEntity<ResultPaginationDataDTO> getPermissions(Pageable pageable) {
+        return ResponseEntity.ok(this.roleService.getRoles(pageable));
     }
 
     @GetMapping("/roles/{id}")
     @ApiMessage("Fetch role by id")
-    public ResponseEntity<Role> getById(@PathVariable("id") long id) throws IdInvalidException {
-        Role role = this.roleService.fetchById(id);
+    public ResponseEntity<Role> getById(@PathVariable("id") Long id) throws IdInvalidException {
+        Role role = this.roleService.fetchById(String.valueOf(id));
         if (role == null) {
             throw new IdInvalidException("Resume với id = " + id + " không tồn tại");
         }

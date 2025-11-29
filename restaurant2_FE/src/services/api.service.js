@@ -105,10 +105,10 @@ const registerUserApi = (fullName, email, password, phone, address) => {
 };
 
 
-const loginApi = (username, password) => {
+const loginApi = (email, password) => {
 
     const data = {
-        username,
+        email,
         password,
 
     }
@@ -150,8 +150,12 @@ const logoutAllAdminUserSessionsAPI = (userId) => {
 };
 
 const fetchAllDish = (page, size, type) => {
-
     let URL_BACKEND = `${DISH_BASE}?${buildPaginationParams(page, size)}`;
+    
+    // Add categoryId filter if type is provided and not "all"
+    if (type && type !== "all") {
+        URL_BACKEND += `&categoryId=${type}`;
+    }
     
     console.log('Fetch dishes URL:', URL_BACKEND, 'type:', type);
     return axios.get(URL_BACKEND);
@@ -169,10 +173,7 @@ const adDishInCart = (quantity, price, total, DishID) => {
         quantity,
         price,
         total,
-        dish: {
-            id: DishID
-        }
-
+        dishId: DishID  // Backend expects dishId directly, not nested in dish object
     }
     return axios.post(URL_BACKEND, data)
 }
@@ -217,6 +218,9 @@ const fetchMyOrder = () => {
     return axios.get(`${ORDER_BASE}/my`);
 };
 
+const getOrderById = (id) => {
+    return axios.get(`${ORDER_BASE}/${id}`);
+};
 
 const fetchAllOrders = (page, size) => {
 
@@ -237,6 +241,10 @@ const createOrderByAdmin = (payload) => {
 const updateOrder = async (id, status) => {
     const URL_BACKEND = `${ORDER_BASE}/status/${id}?status=${status}`;
     return axios.put(URL_BACKEND);
+};
+
+const deleteOrder = (id) => {
+    return axios.delete(`${ORDER_BASE}/${id}`);
 };
 
 
@@ -338,8 +346,12 @@ const loginWithGoogle = (apiGoogle) => {
     return axios.post(apiGoogle);
 }
 
-const changePassword = ({ currentPassword, newPassword }) => {
-    return axios.put(`${AUTH_BASE}/change-password`, { currentPassword, newPassword });
+const changePassword = ({ currentPassword, newPassword, confirmPassword }) => {
+    return axios.put(`${AUTH_BASE}/change-password`, { 
+        currentPassword, 
+        newPassword, 
+        confirmPassword: confirmPassword || newPassword // Fallback to newPassword if not provided
+    });
 };
 
 const getVnpayConfig = () => {
@@ -448,6 +460,10 @@ const deleteRole = (id) => {
     return axios.delete(`${ROLE_BASE}/${id}`);
 };
 
+const getRoleById = (id) => {
+    return axios.get(`${ROLE_BASE}/${id}`);
+};
+
 export {
     createUserApi, fetchAllUserAPI, updateUserApi,
     deleteUserAPI, handleUploadFile, updateUserAvatarApi,
@@ -461,11 +477,11 @@ export {
     fetchAllDish, adDishInCart, getCart, getAllDishInCart,
     updateQuantity, deleteDishInCart, checkOutCart, fetchMyOrder, updateDish, deleteDish,
     fetchAllDishByName, addDish, fetchAllOrders, updateOrder, getImageUrl, getImageUrlFromFileName, fetchAllUser, fetchAllOrdersMy,
-    createOrderByAdmin,
+    createOrderByAdmin, getOrderById, deleteOrder,
     loginWithGoogle,
     importStock, updateStock,
     fetchAllPermissions, createPermission, updatePermission, deletePermission,
-    fetchAllRoles, createRole, updateRole, deleteRole,
+    fetchAllRoles, createRole, updateRole, deleteRole, getRoleById,
     confirmCashPayment, getOrderInfo, getAnalyticsOverview,
     buildImageUrl,
     changePassword,

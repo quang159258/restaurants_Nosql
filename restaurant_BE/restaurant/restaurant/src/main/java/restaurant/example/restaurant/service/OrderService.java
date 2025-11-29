@@ -1,18 +1,19 @@
 package restaurant.example.restaurant.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.domain.*;
+import restaurant.example.restaurant.redis.model.*;
 import restaurant.example.restaurant.domain.request.AdminCreateOrderRequest;
 import restaurant.example.restaurant.domain.response.ResOrder;
 import restaurant.example.restaurant.domain.response.ResOrderItem;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
-import restaurant.example.restaurant.repository.*;
+import restaurant.example.restaurant.redis.repository.*;
 import restaurant.example.restaurant.service.notification.NotificationAudience;
 import restaurant.example.restaurant.service.notification.NotificationMessage;
 import restaurant.example.restaurant.service.notification.NotificationService;
@@ -29,35 +30,42 @@ import java.util.Optional;
 @Service
 public class OrderService {
 
-    private final OrderRepository orderRepository;
-    private final OrderDetailRepository orderDetailRepository;
-    private final UserRepository userRepository;
-    private final EmailService emailService;
-    private final DishRepository dishRepository;
-    private final NotificationService notificationService;
-    private final CacheService cacheService;
-
-    public OrderService(OrderRepository orderRepository,
-            OrderDetailRepository orderDetailRepository,
-            UserRepository userRepository, EmailService emailService,
-            DishRepository dishRepository, NotificationService notificationService,
-            CacheService cacheService) {
-        this.orderRepository = orderRepository;
-        this.orderDetailRepository = orderDetailRepository;
-        this.userRepository = userRepository;
-        this.emailService = emailService;
-        this.dishRepository = dishRepository;
-        this.notificationService = notificationService;
-        this.cacheService = cacheService;
-    }
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    @Autowired
+    private OrderDetailRepository orderDetailRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private EmailService emailService;
+    
+    @Autowired
+    private DishRepository dishRepository;
+    
+    @Autowired
+    private NotificationService notificationService;
+    
+    @Autowired
+    private CacheService cacheService;
+    
+    @Autowired
+    private CartDetailRepository cartDetailRepository;
+    
     public Order createOrderFromCart(Cart cart, String receiverName, String receiverPhone, String receiverAddress,
             String receiverEmail, PaymentMethod paymentMethod) {
+        // Get user for order
+        User user = userRepository.findById(cart.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + cart.getUserId()));
+        
         Order order = new Order();
-        order.setUser(cart.getUser());
-        order.setReceiverName(defaultIfBlank(receiverName, cart.getUser().getUsername()));
-        order.setReceiverPhone(defaultIfBlank(receiverPhone, cart.getUser().getPhone()));
-        order.setReceiverAddress(defaultIfBlank(receiverAddress, cart.getUser().getAddress()));
-        order.setReceiverEmail(defaultIfBlank(receiverEmail, cart.getUser().getEmail()));
+        order.setUserId(cart.getUserId());
+        order.setReceiverName(defaultIfBlank(receiverName, user.getUsername()));
+        order.setReceiverPhone(defaultIfBlank(receiverPhone, user.getPhone()));
+        order.setReceiverAddress(defaultIfBlank(receiverAddress, user.getAddress()));
+        order.setReceiverEmail(defaultIfBlank(receiverEmail, user.getEmail()));
         order.setStatus(OrderStatus.PENDING);
 
         order.setPaymentMethod(paymentMethod != null ? paymentMethod : PaymentMethod.CASH);
@@ -65,7 +73,9 @@ public class OrderService {
         order.setPaymentRef(null);
 
         double total = 0;
-        for (CartDetail item : cart.getCartDetails()) {
+        List<CartDetail> cartDetails = cart.getItems() != null ? cart.getItems() : 
+            cartDetailRepository.findAllByCartId(cart.getId());
+        for (CartDetail item : cartDetails) {
             total = total + item.getTotal();
         }
         order.setTotalPrice(total);
@@ -76,15 +86,16 @@ public class OrderService {
         // Invalidate list cache
         cacheService.deleteAllOrderListCache();
 
-        for (CartDetail cartDetail : cart.getCartDetails()) {
+        for (CartDetail cartDetail : cartDetails) {
             OrderDetail detail = new OrderDetail();
-            detail.setOrder(order);
-            detail.setDish(cartDetail.getDish());
+            detail.setOrderId(order.getId());
+            detail.setDishId(cartDetail.getDishId());
             detail.setPrice(cartDetail.getPrice());
             detail.setQuantity(cartDetail.getQuantity());
             orderDetailRepository.save(detail);
+            
             // ==== Cập nhật tồn kho và số lượng bán/ngày ====
-            Dish dish = cartDetail.getDish();
+            Dish dish = dishRepository.findById(cartDetail.getDishId()).orElse(null);
             if (dish != null) {
                 Integer curStock = dish.getStock() == null ? 0 : dish.getStock();
                 Integer curSold = dish.getSoldToday() == null ? 0 : dish.getSoldToday();
@@ -95,7 +106,7 @@ public class OrderService {
                 dishRepository.save(dish);
                 
                 // Invalidate dish cache
-                cacheService.deleteCachedDish(dish.getId());
+                cacheService.deleteCachedDish(Long.parseLong(dish.getId()));
                 
                 // Kiểm tra tồn kho thấp sau khi bán hàng
                 if (dish.getStock() <= 10) {
@@ -121,14 +132,14 @@ public class OrderService {
 
         User targetUser = null;
         if (request.getUserId() != null) {
-            targetUser = userRepository.findById(request.getUserId())
+            targetUser = userRepository.findById(String.valueOf(request.getUserId()))
                     .orElseThrow(() -> new OrderException("Không tìm thấy người dùng với id = " + request.getUserId()));
         } else if (request.getReceiverEmail() != null) {
             targetUser = userRepository.findByEmail(request.getReceiverEmail());
         }
 
         Order order = new Order();
-        order.setUser(targetUser);
+        order.setUserId(targetUser != null ? targetUser.getId() : null);
         order.setReceiverName(defaultIfBlank(request.getReceiverName(), targetUser != null ? targetUser.getUsername() : null));
         order.setReceiverPhone(defaultIfBlank(request.getReceiverPhone(), targetUser != null ? targetUser.getPhone() : null));
         order.setReceiverAddress(defaultIfBlank(request.getReceiverAddress(), targetUser != null ? targetUser.getAddress() : null));
@@ -148,14 +159,14 @@ public class OrderService {
 
         double total = 0;
         for (AdminCreateOrderRequest.OrderItemRequest item : request.getItems()) {
-            Dish dish = dishRepository.findById(item.getDishId())
+            Dish dish = dishRepository.findById(String.valueOf(item.getDishId()))
                     .orElseThrow(() -> new OrderException("Không tìm thấy món ăn với id = " + item.getDishId()));
             if (dish.getStock() != null && dish.getStock() < item.getQuantity()) {
                 throw new OrderException("Món " + dish.getName() + " không đủ tồn kho");
             }
             OrderDetail detail = new OrderDetail();
-            detail.setOrder(order);
-            detail.setDish(dish);
+            detail.setOrderId(order.getId());
+            detail.setDishId(dish.getId());
             detail.setQuantity(item.getQuantity());
             detail.setPrice(dish.getPrice());
             orderDetailRepository.save(detail);
@@ -190,36 +201,39 @@ public class OrderService {
         return res;
     }
 
-    public List<ResOrderItem> ListOrderItem(Long orderId) {
+    public List<ResOrderItem> ListOrderItem(String orderId) {
         // Lấy danh sách OrderDetail theo orderId
-        System.out.println("check order id" + orderId);
-
-        List<OrderDetail> orderDetails = orderDetailRepository.findByOrderId(orderId); // sửa lại tên method nếu cần
-        System.out.println("check count" + orderDetails.size());
+        List<OrderDetail> orderDetails = orderDetailRepository.findByOrderId(orderId);
         List<ResOrderItem> resList = new ArrayList<>();
         for (OrderDetail detail : orderDetails) {
+            // Get dish for detail
+            Dish dish = dishRepository.findById(detail.getDishId()).orElse(null);
+            
             ResOrderItem res = new ResOrderItem();
             res.setId(detail.getId());
-            res.setQuantity(detail.getQuantity());
+            res.setOrderId(detail.getOrderId());
+            res.setDishId(detail.getDishId());
+            res.setQuantity((int) detail.getQuantity());
+            res.setUnitPrice(java.math.BigDecimal.valueOf(detail.getPrice()));
+            res.setTotalPrice(java.math.BigDecimal.valueOf(detail.getPrice() * detail.getQuantity()));
             res.setPrice(detail.getPrice());
             res.setTotal(detail.getPrice() * detail.getQuantity());
-            if (detail.getDish() != null) {
-                res.setName(detail.getDish().getName());
-                res.setImageUrl(ImageUtils.extractPrimaryImage(detail.getDish().getImageUrl()));
+            if (dish != null) {
+                res.setName(dish.getName());
+                res.setImageUrl(ImageUtils.extractPrimaryImage(dish.getImageUrl()));
             }
             resList.add(res);
         }
-        System.out.println("check count 2" + resList.size());
         return resList;
     }
 
     /** ✅ Lấy tất cả đơn hàng */
-    public ResultPaginationDataDTO getAllOrders(Specification<Order> spec, Pageable pageable) {
+    public ResultPaginationDataDTO getAllOrders(Pageable pageable) {
         // Generate cache key
         String cacheKey = cacheService.generatePaginationKey(
             pageable.getPageNumber(), 
             pageable.getPageSize(),
-            spec != null ? spec.toString() : null
+            null
         );
         
         // Try to get from cache first
@@ -228,16 +242,7 @@ public class OrderService {
             return (ResultPaginationDataDTO) cachedResult;
         }
         
-        // Thêm sort theo createdAt DESC (mới nhất trước) nếu chưa có sort
-        Pageable sortedPageable = pageable.getSort().isSorted() 
-            ? pageable 
-            : PageRequest.of(
-                pageable.getPageNumber(), 
-                pageable.getPageSize(), 
-                Sort.by(Sort.Direction.DESC, "createdAt")
-            );
-        
-        Page<Order> pageOrder = this.orderRepository.findAll(spec, sortedPageable);
+        Page<Order> pageOrder = this.orderRepository.findAll(pageable);
         List<ResOrder> lstRes = new ArrayList<>();
         List<Order> lst = pageOrder.getContent();
 
@@ -273,7 +278,7 @@ public class OrderService {
     }
 
     /** ✅ Lấy đơn hàng theo người dùng */
-    public ResultPaginationDataDTO getOrdersByUser(String email, Specification<Order> spec, Pageable pageable)
+    public ResultPaginationDataDTO getOrdersByUser(String email, Pageable pageable)
             throws OrderException {
         // Lấy thông tin user
         User user = userRepository.findByEmail(email);
@@ -285,7 +290,7 @@ public class OrderService {
         String cacheKey = cacheService.generatePaginationKey(
             pageable.getPageNumber(), 
             pageable.getPageSize(),
-            "user:" + user.getId() + ":" + (spec != null ? spec.toString() : null)
+            "user:" + user.getId()
         );
         
         // Try to get from cache first
@@ -294,21 +299,15 @@ public class OrderService {
             return (ResultPaginationDataDTO) cachedResult;
         }
 
-        // Gộp Specification với điều kiện user
-        Specification<Order> userSpec = (root, query, cb) -> cb.equal(root.get("user").get("id"), user.getId());
-        Specification<Order> finalSpec = (spec == null) ? userSpec : spec.and(userSpec);
-
-        // Thêm sort theo createdAt DESC (mới nhất trước) nếu chưa có sort
-        Pageable sortedPageable = pageable.getSort().isSorted() 
-            ? pageable 
-            : PageRequest.of(
-                pageable.getPageNumber(), 
-                pageable.getPageSize(), 
-                Sort.by(Sort.Direction.DESC, "createdAt")
-            );
-
-        // Truy vấn phân trang
-        Page<Order> pageOrder = orderRepository.findAll(finalSpec, sortedPageable);
+        // Get orders by userId - need to implement pagination manually
+        List<Order> allOrders = orderRepository.findByUserId(user.getId());
+        // Manual pagination
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), allOrders.size());
+        List<Order> pagedOrders = allOrders.subList(start, end);
+        
+        // Create a Page object manually
+        Page<Order> pageOrder = new org.springframework.data.domain.PageImpl<>(pagedOrders, pageable, allOrders.size());
 
         if (pageOrder.isEmpty()) {
             throw new OrderException("No orders found for this user");
@@ -327,7 +326,7 @@ public class OrderService {
             res.setDate(item.getCreatedAt());
             res.setPaymentMethod(item.getPaymentMethod() != null ? item.getPaymentMethod().name() : null);
             res.setPaymentStatus(item.getPaymentStatus() != null ? item.getPaymentStatus().name() : null);
-            res.setListOrderItem(ListOrderItem(item.getId())); // bạn giữ nguyên phần này
+            res.setListOrderItem(ListOrderItem(item.getId()));
             lstRes.add(res);
         }
 
@@ -351,7 +350,7 @@ public class OrderService {
     /**
      * ✅ Lấy đơn hàng theo ID
      **/
-    public ResOrder getOrderById(Long id) throws OrderException {
+    public ResOrder getOrderById(String id) throws OrderException {
         // Try to get from cache first
         Object cachedOrder = cacheService.getCachedOrder(id);
         if (cachedOrder instanceof Order) {
@@ -365,15 +364,16 @@ public class OrderService {
             res.setTotalPrice(order.getTotalPrice());
             res.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
             res.setPaymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+            res.setListOrderItem(ListOrderItem(id));
             return res;
         }
         
         Optional<Order> item = orderRepository.findById(id);
-        Order order = new Order();
+        Order order;
         if (item.isPresent()) {
             order = item.get();
             // Cache the order
-            cacheService.cacheOrder(order.getId(), order);
+            cacheService.cacheOrder(id, order);
         } else {
             throw new OrderException("Not found order");
         }
@@ -386,6 +386,7 @@ public class OrderService {
         res.setTotalPrice(order.getTotalPrice());
         res.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
         res.setPaymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+        res.setListOrderItem(ListOrderItem(id));
         return res;
     }
 
@@ -394,13 +395,12 @@ public class OrderService {
      * 
      * @throws OrderException
      */
-    public ResOrder updateOrderStatus(Long id, String status) throws OrderException {
+    public ResOrder updateOrderStatus(String id, String status) throws OrderException {
         Optional<Order> item = this.orderRepository.findById(id);
         if (!item.isPresent()) {
             throw new OrderException("Not found order");
         }
-        Order order = new Order();
-        order = item.get();
+        Order order = item.get();
         if (status != null) {
             try {
                 OrderStatus newStatus = OrderStatus.valueOf(status.toUpperCase());
@@ -439,10 +439,10 @@ public class OrderService {
      * ✅ Xóa đơn hàng
      */
     public void deleteOrderById(Long id) throws OrderException {
-        if (!orderRepository.existsById(id)) {
+        if (!orderRepository.existsById(String.valueOf(id))) {
             throw new OrderException("Order not found");
         }
-        orderRepository.deleteById(id);
+        orderRepository.deleteById(String.valueOf(id));
         
         // Remove from cache
         cacheService.deleteCachedOrder(id);
@@ -450,19 +450,18 @@ public class OrderService {
         cacheService.deleteAllOrderListCache();
     }
 
-    public void sendEmail(Long idOrder) {
+    public void sendEmail(String idOrder) {
         Optional<Order> option = this.orderRepository.findById(idOrder);
 
         if (option.isPresent()) {
             Order order = option.get();
             List<ResOrderItem> lst = ListOrderItem(idOrder);
-            System.out.println("check lst order" + lst);
             this.emailService.sendEmailFromTemplateSync(order.getReceiverEmail(), "Restaurant", "restaurant",
                     order, lst);
         }
     }
 
-    private void sendOrderCreatedNotifications(Long orderId, String receiverName, Double totalPrice) {
+    private void sendOrderCreatedNotifications(String orderId, String receiverName, Double totalPrice) {
         NotificationMessage payload = NotificationMessage.builder()
                 .put("type", "order")
                 .put("orderId", orderId)

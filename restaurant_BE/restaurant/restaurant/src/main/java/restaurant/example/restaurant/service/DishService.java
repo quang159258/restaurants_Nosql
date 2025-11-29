@@ -1,23 +1,24 @@
 package restaurant.example.restaurant.service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.domain.Category;
-import restaurant.example.restaurant.domain.Dish;
-import restaurant.example.restaurant.domain.User;
+import restaurant.example.restaurant.redis.model.Category;
+import restaurant.example.restaurant.redis.model.Dish;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
-import restaurant.example.restaurant.repository.CategoryRepository;
-import restaurant.example.restaurant.repository.DishRepository;
+import restaurant.example.restaurant.redis.repository.CategoryRepository;
+import restaurant.example.restaurant.redis.repository.DishRepository;
 import restaurant.example.restaurant.service.notification.NotificationAudience;
 import restaurant.example.restaurant.service.notification.NotificationMessage;
 import restaurant.example.restaurant.service.notification.NotificationService;
-import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class DishService {
@@ -36,32 +37,51 @@ public class DishService {
     }
 
     public Dish handleCreatedDish(Dish dish) {
-        if (dish.getCategory() != null && dish.getCategory().getId() != null) {
-            // Lấy Category từ DB theo ID
-            Category category = categoryRepository.findById(dish.getCategory().getId())
-                    .orElseThrow(() -> new RuntimeException(
-                            "Không tìm thấy category với id = " + dish.getCategory().getId()));
-
-            // Gán lại Category đã load đầy đủ vào dish
-            dish.setCategory(category);
-        } else {
+        if ((dish.getCategoryId() == null || dish.getCategoryId().isEmpty()) && dish.getCategory() != null) {
+            Map<String, Object> categoryMap = dish.getCategory();
+            if (categoryMap != null && !categoryMap.isEmpty() && categoryMap.containsKey("id")) {
+                Object categoryIdObj = categoryMap.get("id");
+                if (categoryIdObj != null) {
+                    dish.setCategoryId(String.valueOf(categoryIdObj));
+                }
+            }
+        }
+        
+        if (dish.getCategoryId() == null || dish.getCategoryId().isEmpty()) {
             throw new RuntimeException("Category không hợp lệ");
         }
+        
+        Category category = categoryRepository.findById(dish.getCategoryId())
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy category với id = " + dish.getCategoryId()));
 
         Dish savedDish = dishRepository.save(dish);
-        
-        // Cache the saved dish
-        cacheService.cacheDish(savedDish.getId(), savedDish);
-        
-        // Kiểm tra tồn kho thấp và gửi thông báo
+        cacheService.cacheDish(Long.parseLong(savedDish.getId()), savedDish);
         checkLowStockAndNotify(savedDish);
         
-        return savedDish;
+        return enrichDishWithCategory(savedDish);
     }
     
-    /**
-     * Kiểm tra tồn kho thấp và gửi thông báo cho admin
-     */
+    private Dish enrichDishWithCategory(Dish dish) {
+        if (dish == null || dish.getCategoryId() == null || dish.getCategoryId().isEmpty()) {
+            return dish;
+        }
+        
+        try {
+            Optional<Category> categoryOpt = categoryRepository.findById(dish.getCategoryId());
+            if (categoryOpt.isPresent()) {
+                Category category = categoryOpt.get();
+                Map<String, Object> categoryMap = new HashMap<>();
+                categoryMap.put("id", category.getId());
+                categoryMap.put("name", category.getName());
+                dish.setCategory(categoryMap);
+            }
+        } catch (Exception e) {
+        }
+        
+        return dish;
+    }
+    
     private void checkLowStockAndNotify(Dish dish) {
         if (dish.getStock() != null && dish.getStock() <= 10) {
             notificationService.enqueue(NotificationMessage.builder()
@@ -74,61 +94,106 @@ public class DishService {
         }
     }
 
-    public Optional<Dish> handleGetDishById(Long id) {
-        // Try to get from cache first
-        Object cachedDish = cacheService.getCachedDish(id);
+    public Optional<Dish> handleGetDishById(String id) {
+        Object cachedDish = cacheService.getCachedDish(Long.parseLong(id));
         if (cachedDish instanceof Dish) {
-            return Optional.of((Dish) cachedDish);
+            return Optional.of(enrichDishWithCategory((Dish) cachedDish));
         }
         
-        // If not in cache, get from database and cache it
         Optional<Dish> dish = this.dishRepository.findById(id);
         if (dish.isPresent()) {
-            cacheService.cacheDish(id, dish.get());
+            Dish enrichedDish = enrichDishWithCategory(dish.get());
+            cacheService.cacheDish(Long.parseLong(id), enrichedDish);
+            return Optional.of(enrichedDish);
         }
-        return dish;
+        return Optional.empty();
     }
 
-    public ResultPaginationDataDTO handleGetAllDish(Specification<Dish> spec, Pageable pageable) {
-        Page<Dish> pageUser = this.dishRepository.findAll(spec, pageable);
+    public ResultPaginationDataDTO handleGetAllDish(Pageable pageable) {
+        Page<Dish> pageDish = this.dishRepository.findAll(pageable);
         ResultPaginationDataDTO rs = new ResultPaginationDataDTO();
         ResultPaginationDataDTO.Meta meta = new ResultPaginationDataDTO.Meta();
         meta.setPage(pageable.getPageNumber() + 1);
         meta.setPageSize(pageable.getPageSize());
 
-        meta.setPages(pageUser.getTotalPages());
-        meta.setTotal(pageUser.getTotalElements());
+        meta.setPages(pageDish.getTotalPages());
+        meta.setTotal(pageDish.getTotalElements());
         rs.setMeta(meta);
-        rs.setResult(pageUser.getContent());
+        
+        List<Dish> enrichedDishes = pageDish.getContent().stream()
+                .map(this::enrichDishWithCategory)
+                .collect(Collectors.toList());
+        rs.setResult(enrichedDishes);
+        return rs;
+    }
+    
+    public ResultPaginationDataDTO handleGetDishesByCategory(String categoryId, Pageable pageable) {
+        List<Dish> allCategoryDishes = this.dishRepository.findByCategoryId(categoryId);
+        
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+        int start = page * size;
+        
+        List<Dish> pageContent = allCategoryDishes.stream()
+                .skip(start)
+                .limit(size)
+                .collect(Collectors.toList());
+        
+        // Calculate total pages
+        int totalPages = (int) Math.ceil((double) allCategoryDishes.size() / size);
+        
+        ResultPaginationDataDTO rs = new ResultPaginationDataDTO();
+        ResultPaginationDataDTO.Meta meta = new ResultPaginationDataDTO.Meta();
+        meta.setPage(page + 1);
+        meta.setPageSize(size);
+        meta.setPages(totalPages);
+        meta.setTotal(allCategoryDishes.size());
+        rs.setMeta(meta);
+        
+        List<Dish> enrichedDishes = pageContent.stream()
+                .map(this::enrichDishWithCategory)
+                .collect(Collectors.toList());
+        rs.setResult(enrichedDishes);
         return rs;
     }
 
     public Dish handleUpdateDish(Dish dish) {
-        // Ensure Category is properly loaded from database to avoid TransientObjectException
-        if (dish.getCategory() != null && dish.getCategory().getId() != null) {
-            // Load Category from database to ensure it's in managed state
-            Category category = categoryRepository.findById(dish.getCategory().getId())
-                    .orElseThrow(() -> new RuntimeException(
-                            "Không tìm thấy category với id = " + dish.getCategory().getId()));
-            
-            // Set the managed Category to the dish
-            dish.setCategory(category);
-        } else {
-            throw new RuntimeException("Category không hợp lệ");
+        if ((dish.getCategoryId() == null || dish.getCategoryId().isEmpty()) && dish.getCategory() != null) {
+            Map<String, Object> categoryMap = dish.getCategory();
+            if (categoryMap != null && !categoryMap.isEmpty() && categoryMap.containsKey("id")) {
+                Object categoryIdObj = categoryMap.get("id");
+                if (categoryIdObj != null) {
+                    dish.setCategoryId(String.valueOf(categoryIdObj));
+                }
+            }
         }
         
+        if (dish.getCategoryId() == null || dish.getCategoryId().isEmpty()) {
+            if (dish.getId() == null || dish.getId().isEmpty()) {
+                throw new RuntimeException("Dish ID không hợp lệ");
+            }
+            
+            Optional<Dish> existingDishOpt = this.dishRepository.findById(dish.getId());
+            if (existingDishOpt.isPresent()) {
+                Dish existingDish = existingDishOpt.get();
+                dish.setCategoryId(existingDish.getCategoryId());
+            } else {
+                throw new RuntimeException("Không tìm thấy dish với id = " + dish.getId());
+            }
+        }
+        
+        Category category = categoryRepository.findById(dish.getCategoryId())
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy category với id = " + dish.getCategoryId()));
+        
         Dish updatedDish = this.dishRepository.save(dish);
+        cacheService.cacheDish(Long.parseLong(updatedDish.getId()), updatedDish);
         
-        // Update cache
-        cacheService.cacheDish(updatedDish.getId(), updatedDish);
-        
-        return updatedDish;
+        return enrichDishWithCategory(updatedDish);
     }
 
-    public void handleDeleteDishById(Long id) {
+    public void handleDeleteDishById(String id) {
         this.dishRepository.deleteById(id);
-        
-        // Remove from cache
-        cacheService.deleteCachedDish(id);
+        cacheService.deleteCachedDish(Long.parseLong(id));
     }
 }

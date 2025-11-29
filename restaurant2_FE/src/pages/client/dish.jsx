@@ -44,7 +44,7 @@ const DishPage = () => {
 
     useEffect(() => {
         getDishes(page, size, type);
-    }, [type, page]);
+    }, [type, page, size]);
     return (
         <>
             <DishBanner />

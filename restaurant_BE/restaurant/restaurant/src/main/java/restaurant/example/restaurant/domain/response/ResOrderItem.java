@@ -1,19 +1,19 @@
 package restaurant.example.restaurant.domain.response;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
+import java.math.BigDecimal;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class ResOrderItem {
-    long id;
-    long quantity;
-    double price;
-    double total;
-    String name;
-    String imageUrl;
+    private String id;
+    private String orderId;
+    private String dishId;
+    private String dishName;
+    private int quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
+    private double price;
+    private double total;
+    private String name;
+    private String imageUrl;
 }

@@ -1,39 +1,60 @@
 package restaurant.example.restaurant.domain.request;
 
-import java.util.List;
-
-import jakarta.validation.constraints.Min;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
-@NoArgsConstructor
+import java.util.List;
+
+@Data
 public class AdminCreateOrderRequest {
+    @NotNull(message = "User ID is required")
     private Long userId;
-    @NotEmpty
-    private String receiverName;
-    @NotEmpty
-    private String receiverPhone;
-    @NotEmpty
-    private String receiverAddress;
-    private String receiverEmail;
+    
+    @NotNull(message = "Customer name is required")
+    private String customerName;
+    
+    @NotNull(message = "Customer email is required")
+    @Email(message = "Email should be valid")
+    private String customerEmail;
+    
+    private String customerPhone;
+    
+    @NotEmpty(message = "Order items cannot be empty")
+    private List<@Valid OrderItemRequest> items;
+    
+    private String deliveryAddress;
     private String paymentMethod;
-    @NotNull
-    @NotEmpty
-    private List<OrderItemRequest> items;
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
+    private String note;
+    private String status;
+    
+    // Aliases for backward compatibility
+    public String getReceiverName() {
+        return customerName;
+    }
+    
+    public String getReceiverPhone() {
+        return customerPhone;
+    }
+    
+    public String getReceiverAddress() {
+        return deliveryAddress;
+    }
+    
+    public String getReceiverEmail() {
+        return customerEmail;
+    }
+    
+    @Data
     public static class OrderItemRequest {
-        @NotNull
+        @NotNull(message = "Dish ID is required")
         private Long dishId;
-        @Min(1)
-        private int quantity;
+        
+        @NotNull(message = "Quantity is required")
+        private Integer quantity;
+        
+        private String specialRequest;
     }
 }
-

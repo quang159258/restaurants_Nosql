@@ -2,9 +2,8 @@ package restaurant.example.restaurant.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import restaurant.example.restaurant.domain.Order;
-import restaurant.example.restaurant.repository.OrderRepository;
+import restaurant.example.restaurant.redis.model.Order;
+import restaurant.example.restaurant.redis.repository.OrderRepository;
 import restaurant.example.restaurant.util.constant.OrderStatus;
 import restaurant.example.restaurant.util.constant.PaymentMethod;
 import restaurant.example.restaurant.util.constant.PaymentStatus;
@@ -19,11 +18,7 @@ public class PaymentService {
     @Autowired
     private OrderRepository orderRepository;
     
-    /**
-     * Xác nhận thanh toán tiền mặt (dành cho staff/admin)
-     */
-    @Transactional
-    public Map<String, Object> confirmCashPayment(Long orderId) {
+    public Map<String, Object> confirmCashPayment(String orderId) {
         Map<String, Object> result = new HashMap<>();
         
         try {
@@ -36,21 +31,18 @@ public class PaymentService {
             
             Order order = orderOpt.get();
             
-            // Kiểm tra phương thức thanh toán
             if (!PaymentMethod.CASH.equals(order.getPaymentMethod())) {
                 result.put("status", "error");
                 result.put("message", "This order is not cash payment");
                 return result;
             }
             
-            // Kiểm tra trạng thái thanh toán
             if (PaymentStatus.PAID.equals(order.getPaymentStatus())) {
                 result.put("status", "error");
                 result.put("message", "This order is already paid");
                 return result;
             }
             
-            // Cập nhật trạng thái thanh toán và đơn hàng
             order.setPaymentStatus(PaymentStatus.PAID);
             order.setStatus(OrderStatus.CONFIRMED);
             orderRepository.save(order);
@@ -67,10 +59,7 @@ public class PaymentService {
         return result;
     }
     
-    /**
-     * Lấy thông tin đơn hàng
-     */
-    public Map<String, Object> getOrderInfo(Long orderId) {
+    public Map<String, Object> getOrderInfo(String orderId) {
         Map<String, Object> result = new HashMap<>();
         
         try {

@@ -19,8 +19,6 @@ import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 import restaurant.example.restaurant.service.SessionService;
 
 @Configuration
-// anotation được hiểu là cấu hình lại config mặc định (ghi đè)
-
 @EnableMethodSecurity(securedEnabled = true)
 public class SecurityConfiguration {
         @Bean
@@ -43,7 +41,7 @@ public class SecurityConfiguration {
                                                                                 "/images/**",
                                                                 "/ws/**",
                                                                                 "/pre-signed-url/**",
-                                                                                "/cart/call-back-vnpay",
+                                                                                "/cart/**",
                                                                                 "/email")
                                                                 .permitAll()
                                                                 .requestMatchers(
@@ -60,7 +58,6 @@ public class SecurityConfiguration {
                                                 .accessDeniedHandler(new BearerTokenAccessDeniedHandler()))
                                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults())
                                                 .authenticationEntryPoint(customAuthenticationEntryPoint))
-                                // custom
                                 .formLogin(f -> f.disable())
                                 .sessionManagement(session -> session
                                                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))

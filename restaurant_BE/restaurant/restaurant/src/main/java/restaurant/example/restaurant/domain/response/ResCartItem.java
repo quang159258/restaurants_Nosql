@@ -1,20 +1,20 @@
 package restaurant.example.restaurant.domain.response;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
+import java.math.BigDecimal;
 
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
+@Data
 public class ResCartItem {
-    long id;
-    long quantity;
-    double price;
-    double total;
-    String name;
-    String imageUrl;
-    String categoryName;
+    private String id;
+    private String dishId;
+    private String dishName;
+    private String dishImage;
+    private int quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
+    private double price;
+    private double total;
+    private String name;
+    private String imageUrl;
+    private String categoryName;
 }

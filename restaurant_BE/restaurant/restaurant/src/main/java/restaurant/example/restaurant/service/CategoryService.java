@@ -6,8 +6,8 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.domain.Category;
-import restaurant.example.restaurant.repository.CategoryRepository;
+import restaurant.example.restaurant.redis.model.Category;
+import restaurant.example.restaurant.redis.repository.CategoryRepository;
 
 @Service
 public class CategoryService {
@@ -23,7 +23,7 @@ public class CategoryService {
     public Category handleCreatedCategory(Category category) {
         Category savedCategory = this.categoryRepository.save(category);
         // Cache the saved category
-        cacheService.cacheCategory(savedCategory.getId(), savedCategory);
+        cacheService.cacheCategory(Long.parseLong(savedCategory.getId()), savedCategory);
         // Invalidate list cache
         cacheService.deleteAllCategoryListCache();
         return savedCategory;
@@ -32,16 +32,16 @@ public class CategoryService {
     public Category handleUpdateCategory(Category category) {
         Category updatedCategory = this.categoryRepository.save(category);
         // Update cache
-        cacheService.cacheCategory(updatedCategory.getId(), updatedCategory);
+        cacheService.cacheCategory(Long.parseLong(updatedCategory.getId()), updatedCategory);
         // Invalidate list cache
         cacheService.deleteAllCategoryListCache();
         return updatedCategory;
     }
 
-    public void handleDeleteCategory(Long id) {
+    public void handleDeleteCategory(String id) {
         this.categoryRepository.deleteById(id);
         // Remove from cache
-        cacheService.deleteCachedCategory(id);
+        cacheService.deleteCachedCategory(Long.parseLong(id));
         // Invalidate list cache
         cacheService.deleteAllCategoryListCache();
     }
@@ -62,9 +62,9 @@ public class CategoryService {
         return categories;
     }
 
-    public Optional<Category> handleGetByIdCategory(Long id) {
+    public Optional<Category> handleGetByIdCategory(String id) {
         // Try to get from cache first
-        Object cachedCategory = cacheService.getCachedCategory(id);
+        Object cachedCategory = cacheService.getCachedCategory(Long.parseLong(id));
         if (cachedCategory instanceof Category) {
             return Optional.of((Category) cachedCategory);
         }
@@ -72,7 +72,7 @@ public class CategoryService {
         // If not in cache, get from database and cache it
         Optional<Category> category = this.categoryRepository.findById(id);
         if (category.isPresent()) {
-            cacheService.cacheCategory(id, category.get());
+            cacheService.cacheCategory(Long.parseLong(id), category.get());
         }
         return category;
     }

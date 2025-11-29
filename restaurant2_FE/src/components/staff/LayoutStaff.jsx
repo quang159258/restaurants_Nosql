@@ -131,7 +131,7 @@ const LayoutStaff = () => {
                             }}
                         />
                         <div className="flex items-center gap-4">
-                            <NotificationCenter userRole={user?.role?.name} userId={user?.id} />
+                            <NotificationCenter userRole={user?.role} userId={user?.id} />
                             <Dropdown menu={{ items }} placement="bottomRight">
                                 <div className="flex items-center cursor-pointer">
                                     <span className="mr-2">{user?.username || 'Staff'}</span>

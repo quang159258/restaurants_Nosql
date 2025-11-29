@@ -65,7 +65,7 @@ const LoginPage = () => {
                 addNotification("Login successful", "Welcome back!", "success");
 
                 // Redirect based on user role
-                const role = user.role?.name || '';
+                const role = user.role || '';
                 if (role === "SUPER_ADMIN") {
                     navigate("/admin");
                 } else if (role === "STAFF") {

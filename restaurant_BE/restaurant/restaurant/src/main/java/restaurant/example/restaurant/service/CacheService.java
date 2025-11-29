@@ -180,11 +180,11 @@ public class CacheService {
     }
     
     // Order cache methods
-    public void cacheOrder(Long orderId, Object order) {
+    public void cacheOrder(String orderId, Object order) {
         cacheObject(ORDER_CACHE_PREFIX + orderId, order, ORDER_CACHE_DURATION);
     }
     
-    public Object getCachedOrder(Long orderId) {
+    public Object getCachedOrder(String orderId) {
         return getCachedObject(ORDER_CACHE_PREFIX + orderId);
     }
     

@@ -1,7 +1,5 @@
 package restaurant.example.restaurant.controller;
 
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,9 +10,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.turkraft.springfilter.boot.Filter;
 import jakarta.validation.Valid;
-import restaurant.example.restaurant.domain.Permission;
+import org.springframework.data.domain.Pageable;
+import restaurant.example.restaurant.redis.model.Permission;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
 import restaurant.example.restaurant.service.PermissionService;
 import restaurant.example.restaurant.util.anotation.ApiMessage;
@@ -59,19 +57,18 @@ public class PermissionController {
 
     @DeleteMapping("/permissions/{id}")
     @ApiMessage("delete a permission")
-    public ResponseEntity<Void> delete(@PathVariable("id") long id) throws IdInvalidException {
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) throws IdInvalidException {
         // check exist by id
-        if (this.permissionService.fetchById(id) == null) {
+        if (this.permissionService.fetchById(String.valueOf(id)) == null) {
             throw new IdInvalidException("Permission với id = " + id + " không tồn tại.");
         }
-        this.permissionService.delete(id);
+        this.permissionService.delete(String.valueOf(id));
         return ResponseEntity.ok().body(null);
     }
 
     @GetMapping("/permissions")
     @ApiMessage("Fetch permissions")
-    public ResponseEntity<ResultPaginationDataDTO> getPermissions(
-            @Filter Specification<Permission> spec, Pageable pageable) {
-        return ResponseEntity.ok(this.permissionService.getPermissions(spec, pageable));
+    public ResponseEntity<ResultPaginationDataDTO> getPermissions(Pageable pageable) {
+        return ResponseEntity.ok(this.permissionService.getPermissions(pageable));
     }
 }

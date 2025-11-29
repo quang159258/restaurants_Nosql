@@ -1,38 +1,35 @@
 package restaurant.example.restaurant.service;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import restaurant.example.restaurant.redis.model.Order;
+import restaurant.example.restaurant.redis.repository.OrderRepository;
+import restaurant.example.restaurant.redis.repository.UserRepository;
+import restaurant.example.restaurant.domain.response.AnalyticsOverviewResponse;
+import restaurant.example.restaurant.domain.response.AnalyticsOverviewResponse.DailyRevenuePoint;
+import restaurant.example.restaurant.domain.response.AnalyticsOverviewResponse.TopDish;
+import restaurant.example.restaurant.util.constant.OrderStatus;
+import restaurant.example.restaurant.util.constant.PaymentStatus;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.springframework.data.domain.PageRequest;
-import org.springframework.stereotype.Service;
-
-import restaurant.example.restaurant.domain.Order;
-import restaurant.example.restaurant.domain.response.AnalyticsOverviewResponse;
-import restaurant.example.restaurant.domain.response.AnalyticsOverviewResponse.DailyRevenuePoint;
-import restaurant.example.restaurant.domain.response.AnalyticsOverviewResponse.TopDish;
-import restaurant.example.restaurant.repository.OrderDetailRepository;
-import restaurant.example.restaurant.repository.OrderRepository;
-import restaurant.example.restaurant.repository.UserRepository;
-import restaurant.example.restaurant.util.constant.OrderStatus;
-import restaurant.example.restaurant.util.constant.PaymentStatus;
+import java.util.stream.Collectors;
 
 @Service
 public class AnalyticsService {
 
     private final OrderRepository orderRepository;
-    private final OrderDetailRepository orderDetailRepository;
     private final UserRepository userRepository;
 
-    public AnalyticsService(OrderRepository orderRepository, OrderDetailRepository orderDetailRepository,
-            UserRepository userRepository) {
+    public AnalyticsService(OrderRepository orderRepository, UserRepository userRepository) {
         this.orderRepository = orderRepository;
-        this.orderDetailRepository = orderDetailRepository;
         this.userRepository = userRepository;
     }
 
@@ -48,58 +45,67 @@ public class AnalyticsService {
         long delivering = orderRepository.countByStatusAndCreatedAtBetween(OrderStatus.DELIVERING, start, end);
         long delivered = orderRepository.countByStatusAndCreatedAtBetween(OrderStatus.DELIVERED, start, end);
         long cancelled = orderRepository.countByStatusAndCreatedAtBetween(OrderStatus.CANCELLED, start, end);
-        long unpaid = orders.stream()
-                .filter(order -> order.getPaymentStatus() == PaymentStatus.PAYMENT_UNPAID)
-                .count();
-        double avgOrderValue = totalOrders == 0 ? 0 : totalRevenue / totalOrders;
-        long newCustomers = userRepository.countByCreatedAtBetween(start, end);
 
-        List<DailyRevenuePoint> trend = buildRevenueTrend(orders);
-        List<TopDish> topDishes = buildTopDishes(start, end, topDishLimit);
+        List<DailyRevenuePoint> revenueTrend = buildRevenueTrend(orders);
+        List<TopDish> topDishes = buildTopDishes(orders, topDishLimit);
 
         AnalyticsOverviewResponse response = new AnalyticsOverviewResponse();
-        response.setTotalRevenue(totalRevenue);
+        response.setTotalRevenue(BigDecimal.valueOf(totalRevenue));
         response.setTotalOrders(totalOrders);
-        response.setPendingOrders(pending);
-        response.setConfirmedOrders(confirmed);
-        response.setDeliveringOrders(delivering);
-        response.setDeliveredOrders(delivered);
-        response.setCancelledOrders(cancelled);
-        response.setUnpaidOrders(unpaid);
-        response.setAverageOrderValue(avgOrderValue);
-        response.setNewCustomers(newCustomers);
-        response.setRevenueTrend(trend);
+        response.setTotalCustomers(userRepository.countByCreatedAtBetween(start, end));
+        response.setTotalDishesSold(orders.stream()
+                .mapToInt(Order::getTotalItems)
+                .sum());
+        response.setRevenueTrend(revenueTrend);
         response.setTopDishes(topDishes);
+
         return response;
     }
 
     private List<DailyRevenuePoint> buildRevenueTrend(List<Order> orders) {
-        Map<LocalDate, Double> aggregated = new HashMap<>();
-        ZoneId zoneId = ZoneId.systemDefault();
+        Map<LocalDate, Double> dailyRevenue = orders.stream()
+                .filter(order -> order.getStatus() != OrderStatus.CANCELLED)
+                .collect(Collectors.groupingBy(
+                        order -> order.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate(),
+                        Collectors.summingDouble(Order::getTotalPrice)
+                ));
+
+        return dailyRevenue.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> {
+                    DailyRevenuePoint point = new DailyRevenuePoint();
+                    point.setDate(entry.getKey());
+                    point.setRevenue(BigDecimal.valueOf(entry.getValue()));
+                    point.setOrderCount(orders.stream()
+                            .filter(o -> o.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate().equals(entry.getKey()))
+                            .count());
+                    return point;
+                })
+                .collect(Collectors.toList());
+    }
+
+    private List<TopDish> buildTopDishes(List<Order> orders, int limit) {
+        Map<String, TopDish> dishMap = new HashMap<>();
+
         orders.stream()
                 .filter(order -> order.getStatus() != OrderStatus.CANCELLED)
-                .forEach(order -> {
-                    LocalDate date = LocalDate.ofInstant(order.getCreatedAt(), zoneId);
-                    aggregated.merge(date, order.getTotalPrice(), Double::sum);
+                .flatMap(order -> order.getOrderItems().stream())
+                .forEach(item -> {
+                    String dishId = item.getDishId();
+                    TopDish dish = dishMap.computeIfAbsent(dishId, k -> {
+                        TopDish d = new TopDish();
+                        d.setDishId(dishId);
+                        d.setDishName(item.getDishName());
+                        return d;
+                    });
+                    dish.setQuantitySold(dish.getQuantitySold() + item.getQuantity());
+                    BigDecimal revenueToAdd = BigDecimal.valueOf(item.getPrice() * item.getQuantity());
+                    dish.setTotalRevenue(dish.getTotalRevenue().add(revenueToAdd));
                 });
-        List<DailyRevenuePoint> points = new ArrayList<>();
-        aggregated.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> points.add(new DailyRevenuePoint(entry.getKey(), entry.getValue())));
-        return points;
-    }
 
-    private List<TopDish> buildTopDishes(Instant start, Instant end, int topDishLimit) {
-        List<Object[]> raw = orderDetailRepository.findTopSellingDishes(start, end, PageRequest.of(0, topDishLimit));
-        List<TopDish> result = new ArrayList<>();
-        for (Object[] record : raw) {
-            String name = record[0] != null ? record[0].toString() : "N/A";
-            Long quantity = record[1] != null ? ((Number) record[1]).longValue() : 0L;
-            Double revenue = record[2] != null ? ((Number) record[2]).doubleValue() : 0D;
-            result.add(new TopDish(name, quantity, revenue));
-        }
-        result.sort(Comparator.comparingLong(TopDish::getQuantity).reversed());
-        return result;
+        return dishMap.values().stream()
+                .sorted(Comparator.comparing(TopDish::getTotalRevenue, Comparator.reverseOrder()))
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 }
-

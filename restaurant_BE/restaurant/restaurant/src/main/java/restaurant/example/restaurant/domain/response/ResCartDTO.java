@@ -1,18 +1,15 @@
 package restaurant.example.restaurant.domain.response;
 
+import lombok.Data;
 import java.math.BigDecimal;
+import java.util.List;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class ResCartDTO {
-    private Long id; // ID của giỏ hàng
-    private int totalItems; // Tổng số sản phẩm trong giỏ
-    private double totalPrice; // Tổng tiền
+    private String id;
+    private String userId;
+    private List<ResCartItem> items;
+    private int totalItems;
+    private BigDecimal totalPrice;
+    private String status;
 }

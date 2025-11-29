@@ -1,23 +1,17 @@
 package restaurant.example.restaurant.domain.response;
 
-import java.time.Instant;
+import lombok.Data;
+import java.time.LocalDateTime;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import restaurant.example.restaurant.util.constant.GenderEnum;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class ResCreateUserDTO {
-    private long id;
-    private String name;
+    private String id;
+    private String username;
     private String email;
+    private String fullName;
     private String phone;
-    private GenderEnum gender;
+    private LocalDateTime createdAt;
+    private String name;
+    private String gender;
     private String address;
-    private Instant createdAt;
 }

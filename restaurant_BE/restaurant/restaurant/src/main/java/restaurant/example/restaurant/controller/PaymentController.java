@@ -5,8 +5,9 @@ import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+
+import restaurant.example.restaurant.util.SecurityUtil;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,9 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.annotation.security.PermitAll;
-import restaurant.example.restaurant.domain.Order;
-import restaurant.example.restaurant.domain.User;
-import restaurant.example.restaurant.repository.OrderRepository;
+import restaurant.example.restaurant.redis.model.Order;
+import restaurant.example.restaurant.redis.model.User;
+import restaurant.example.restaurant.redis.repository.OrderRepository;
+import restaurant.example.restaurant.redis.repository.RoleRepository;
 import restaurant.example.restaurant.service.PaymentService;
 import restaurant.example.restaurant.service.UserService;
 import restaurant.example.restaurant.service.VnpayService;
@@ -33,13 +35,15 @@ public class PaymentController {
     private final VnpayService vnpayService;
     private final OrderRepository orderRepository;
     private final UserService userService;
+    private final RoleRepository roleRepository;
 
     public PaymentController(PaymentService paymentService, VnpayService vnpayService,
-            OrderRepository orderRepository, UserService userService) {
+            OrderRepository orderRepository, UserService userService, RoleRepository roleRepository) {
         this.paymentService = paymentService;
         this.vnpayService = vnpayService;
         this.orderRepository = orderRepository;
         this.userService = userService;
+        this.roleRepository = roleRepository;
     }
     
     /**
@@ -47,7 +51,7 @@ public class PaymentController {
      */
     @PostMapping("/cash/confirm/{orderId}")
     @PreAuthorize("hasRole('STAFF') or hasRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> confirmCashPayment(@PathVariable Long orderId) {
+    public ResponseEntity<Map<String, Object>> confirmCashPayment(@PathVariable String orderId) {
         Map<String, Object> result = paymentService.confirmCashPayment(orderId);
         
         if ("success".equals(result.get("status"))) {
@@ -61,7 +65,7 @@ public class PaymentController {
      * Lấy thông tin đơn hàng
      */
     @GetMapping("/order/{orderId}")
-    public ResponseEntity<Map<String, Object>> getOrderInfo(@PathVariable Long orderId) {
+    public ResponseEntity<Map<String, Object>> getOrderInfo(@PathVariable String orderId) {
         Map<String, Object> result = paymentService.getOrderInfo(orderId);
         
         if ("success".equals(result.get("status"))) {
@@ -80,7 +84,7 @@ public class PaymentController {
     }
 
     @PostMapping("/vnpay/order/{orderId}")
-    public ResponseEntity<Map<String, Object>> createVnpayPayment(@PathVariable Long orderId,
+    public ResponseEntity<Map<String, Object>> createVnpayPayment(@PathVariable String orderId,
             HttpServletRequest request) throws CartException {
         if (!vnpayService.isConfigured()) {
             throw new CartException("VNPay chưa được cấu hình.");
@@ -88,13 +92,19 @@ public class PaymentController {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new CartException("Không tìm thấy đơn hàng"));
 
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        String email = SecurityUtil.getAuthenticatedEmail();
         User currentUser = userService.handelGetUserByUsername(email);
-        boolean isOwner = order.getUser() != null && currentUser != null && order.getUser().getId().equals(currentUser.getId());
-        boolean isPrivileged = currentUser != null && currentUser.getRole() != null
-                && ("ADMIN".equalsIgnoreCase(currentUser.getRole().getName())
-                        || "SUPER_ADMIN".equalsIgnoreCase(currentUser.getRole().getName())
-                        || "STAFF".equalsIgnoreCase(currentUser.getRole().getName()));
+        boolean isOwner = order.getUserId() != null && currentUser != null && order.getUserId().equals(currentUser.getId());
+        boolean isPrivileged = false;
+        if (currentUser != null && currentUser.getRoleId() != null) {
+            restaurant.example.restaurant.redis.model.Role role = roleRepository.findById(currentUser.getRoleId()).orElse(null);
+            if (role != null) {
+                String roleName = role.getName();
+                isPrivileged = "ADMIN".equalsIgnoreCase(roleName)
+                        || "SUPER_ADMIN".equalsIgnoreCase(roleName)
+                        || "STAFF".equalsIgnoreCase(roleName);
+            }
+        }
 
         if (!isOwner && !isPrivileged) {
             throw new CartException("Bạn không thể thanh toán đơn hàng này.");

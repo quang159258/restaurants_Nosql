@@ -2,21 +2,18 @@ package restaurant.example.restaurant.service;
 
 import java.util.Optional;
 
-import org.springframework.data.jpa.domain.Specification;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Pageable;
-import restaurant.example.restaurant.domain.Permission;
+import restaurant.example.restaurant.redis.model.Permission;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
-import restaurant.example.restaurant.repository.PermissionRepository;
+import restaurant.example.restaurant.redis.repository.PermissionRepository;
 
 @Service
 public class PermissionService {
-    private final PermissionRepository permissionRepository;
-
-    public PermissionService(PermissionRepository permissionRepository) {
-        this.permissionRepository = permissionRepository;
-    }
+    @Autowired
+    private PermissionRepository permissionRepository;
 
     public boolean isPermissionExist(Permission p) {
         return permissionRepository.existsByModuleAndApiPathAndMethod(
@@ -25,7 +22,7 @@ public class PermissionService {
                 p.getMethod());
     }
 
-    public Permission fetchById(long id) {
+    public Permission fetchById(String id) {
         Optional<Permission> permissionOptional = this.permissionRepository.findById(id);
         if (permissionOptional.isPresent())
             return permissionOptional.get();
@@ -50,18 +47,14 @@ public class PermissionService {
         return null;
     }
 
-    public void delete(long id) {
-        // delete permission_role
-        Optional<Permission> permissionOptional = this.permissionRepository.findById(id);
-        Permission currentPermission = permissionOptional.get();
-        currentPermission.getRoles().forEach(role -> role.getPermissions().remove(currentPermission));
-        // delete permission
-
-        this.permissionRepository.delete(currentPermission);
+    public void delete(String id) {
+        // In Redis, we just delete the permission
+        // Role-permission relationships are managed via role.permissionIds
+        this.permissionRepository.deleteById(id);
     }
 
-    public ResultPaginationDataDTO getPermissions(Specification<Permission> spec, Pageable pageable) {
-        Page<Permission> pPermissions = this.permissionRepository.findAll(spec, pageable);
+    public ResultPaginationDataDTO getPermissions(Pageable pageable) {
+        Page<Permission> pPermissions = this.permissionRepository.findAll(pageable);
         ResultPaginationDataDTO rs = new ResultPaginationDataDTO();
         ResultPaginationDataDTO.Meta mt = new ResultPaginationDataDTO.Meta();
         mt.setPage(pageable.getPageNumber() + 1);

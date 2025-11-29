@@ -128,7 +128,7 @@ const TableDish = () => {
             name: record.name,
             description: record.description,
             price: record.price,
-            categoryId: record.category.id,
+            categoryId: record.category?.id || record.categoryId || undefined,
             stock: record.stock || 0,
             imageUrl: record.imageUrl,
         });
@@ -194,10 +194,18 @@ const TableDish = () => {
                 price: values.price,
                 stock: values.stock,
                 imageUrl: values.imageUrl || selectedDish?.imageUrl || "",
-                category: {
-                    id: values.categoryId,
-                },
             };
+            
+            // Chỉ thêm category nếu categoryId có giá trị
+            if (values.categoryId) {
+                payload.category = {
+                    id: values.categoryId,
+                };
+            } else {
+                // Nếu không có categoryId, gửi empty object để backend giữ nguyên category hiện tại
+                payload.category = {};
+            }
+            
             const res = await updateDish(payload);
             const data = res?.data ?? res;
             if (data) {
@@ -211,7 +219,9 @@ const TableDish = () => {
             }
         } catch (error) {
             console.error("Lỗi khi cập nhật món ăn:", error);
-            message.error("Cập nhật món ăn thất bại!");
+            const errorMessage = error?.response?.data?.error || error?.message || "Cập nhật món ăn thất bại!";
+            message.error(errorMessage);
+            addNotification("Lỗi khi cập nhật món ăn", errorMessage, "error");
         }
     };
 

@@ -454,7 +454,7 @@ const Navbar = () => {
             </Drawer >
 
             {/* WebSocket Notification Center */}
-            <NotificationCenter userRole={user?.role?.name} userId={user?.id} />
+            <NotificationCenter userRole={user?.role} userId={user?.id} />
 
         </>
     );

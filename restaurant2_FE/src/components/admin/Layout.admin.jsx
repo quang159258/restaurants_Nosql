@@ -178,7 +178,7 @@ const selectedKey =
                 </Typography.Title>
 
                 <Space size="large" align="center">
-                    <NotificationCenter userRole={user?.role?.name} userId={user?.id} />
+                    <NotificationCenter userRole={user?.role} userId={user?.id} />
                     <Dropdown menu={profileMenu} placement="bottomRight" trigger={["click"]}>
                         <Space
                             style={{

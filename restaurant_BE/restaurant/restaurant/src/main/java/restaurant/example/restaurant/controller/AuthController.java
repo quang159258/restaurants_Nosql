@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,12 +15,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import restaurant.example.restaurant.config.JwtConfiguration;
-import restaurant.example.restaurant.domain.Role;
-import restaurant.example.restaurant.domain.User;
+import restaurant.example.restaurant.redis.model.User;
+import restaurant.example.restaurant.redis.repository.RoleRepository;
 import restaurant.example.restaurant.domain.response.ResCreateUserDTO;
 import restaurant.example.restaurant.domain.response.ResLoginDTO;
 import restaurant.example.restaurant.domain.request.ReqLoginDTO;
 import restaurant.example.restaurant.domain.request.ChangePasswordRequest;
+import restaurant.example.restaurant.domain.response.ResSessionInfoDTO;
 import restaurant.example.restaurant.service.UserService;
 import restaurant.example.restaurant.util.SecurityUtil;
 import restaurant.example.restaurant.util.anotation.ApiMessage;
@@ -48,11 +49,13 @@ import restaurant.example.restaurant.domain.response.ResSessionInfoDTO;
 @RestController
 @RequestMapping("/api/v1")
 public class AuthController {
-    private final AuthenticationManagerBuilder authenticationManagerBuilder;
+    private final AuthenticationConfiguration authenticationConfiguration;
     private final SecurityUtil securityUtil;
     private final UserService userService;
     private final JwtConfiguration jwtConfiguration;
     private final PasswordEncoder passwordEncoder;
+    @Autowired
+    private RoleRepository roleRepository;
     @Value("${restaurant.jwt.refresh-token-validity-in-seconds}")
     private long refreshJwtExpiration;
     @Value("${app.security.cookie-secure:false}")
@@ -61,10 +64,10 @@ public class AuthController {
     @Autowired
     private SessionService sessionService;
 
-    public AuthController(AuthenticationManagerBuilder authenticationManagerBuilder,
+    public AuthController(AuthenticationConfiguration authenticationConfiguration,
             SecurityUtil securityUtil, UserService userService, JwtConfiguration jwtConfiguration,
             PasswordEncoder passwordEncoder) {
-        this.authenticationManagerBuilder = authenticationManagerBuilder;
+        this.authenticationConfiguration = authenticationConfiguration;
         this.securityUtil = securityUtil;
         this.userService = userService;
         this.jwtConfiguration = jwtConfiguration;
@@ -74,36 +77,44 @@ public class AuthController {
     @PostMapping("/auth/login")
     public ResponseEntity<ResLoginDTO> login(@RequestBody ReqLoginDTO loginDTO, HttpServletRequest request,
             HttpServletResponse response) throws IdInvalidException {
-        // Nạp input gồm username/password vào Security
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                 loginDTO.getUsername(), loginDTO.getPassword());
 
-        // xác thực người dùng => cần viết hàm loadUserByUsername
-        Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+        Authentication authentication;
+        try {
+            authentication = authenticationConfiguration.getAuthenticationManager().authenticate(authenticationToken);
+        } catch (Exception e) {
+            throw new IdInvalidException("Authentication failed: " + e.getMessage());
+        }
 
-        // nạp thông tin (nếu xử lý thành công) vào SecurityContext
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         ResLoginDTO res = new ResLoginDTO();
         User currentUserBD = this.userService.handelGetUserByUsername(loginDTO.getUsername());
-        if (currentUserBD != null) {
-            ResLoginDTO.UserLogin user = new ResLoginDTO.UserLogin();
-            user.setEmail(currentUserBD.getEmail());
-            user.setId(currentUserBD.getId());
-            user.setName(currentUserBD.getUsername());
-            user.setRole(currentUserBD.getRole());
-            res.setUser(user);
+        if (currentUserBD == null) {
+            throw new IdInvalidException("User not found with email: " + loginDTO.getUsername());
         }
+        
+        ResLoginDTO.UserLogin user = new ResLoginDTO.UserLogin();
+        user.setEmail(currentUserBD.getEmail());
+        user.setId(currentUserBD.getId());
+        user.setName(currentUserBD.getUsername());
+        String roleName = null;
+        if (currentUserBD.getRoleId() != null) {
+            restaurant.example.restaurant.redis.model.Role role = roleRepository.findById(currentUserBD.getRoleId()).orElse(null);
+            roleName = role != null ? role.getName() : null;
+        }
+        user.setRole(roleName);
+        res.setUser(user);
+        
         String access_token = this.securityUtil.createAccessToken(authentication.getName(), res.getUser());
         res.setAccessToken(access_token);
         String refreshToken = this.securityUtil.createRefreshToken(authentication.getName(), res);
         this.userService.updateUserToken(refreshToken, currentUserBD.getEmail());
 
-        // Tạo sessionId mapping tới userId lưu trên Redis
         String userAgent = request != null ? request.getHeader("User-Agent") : null;
         String clientIp = request != null ? request.getRemoteAddr() : null;
         
-        // Kiểm tra xem thiết bị có bị chặn không
         if (sessionService.isDeviceBlocked(currentUserBD.getId(), userAgent, clientIp)) {
             throw new IdInvalidException("Thiết bị này đã bị chặn đăng nhập. Vui lòng liên hệ quản trị viên.");
         }
@@ -112,7 +123,7 @@ public class AuthController {
         Cookie sessionCookie = new Cookie("SESSIONID", sessionId);
         sessionCookie.setHttpOnly(true);
         sessionCookie.setPath("/");
-        sessionCookie.setMaxAge(86400); // 1 ngày
+        sessionCookie.setMaxAge(86400);
         sessionCookie.setSecure(cookieSecure);
         response.addCookie(sessionCookie);
 
@@ -151,15 +162,21 @@ public class AuthController {
         String email = SecurityUtil.getCurrentUserLogin().isPresent() ? SecurityUtil.getCurrentUserLogin().get() : "";
         User currentUserDB = this.userService.handelGetUserByUsername(email);
 
-        // ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin();
         ResLoginDTO.UserGetAccount userGetAccount = new ResLoginDTO.UserGetAccount();
         if (currentUserDB != null) {
             userGetAccount.setId(currentUserDB.getId());
             userGetAccount.setEmail(currentUserDB.getEmail());
             userGetAccount.setUsername(currentUserDB.getUsername());
-            userGetAccount.setRole(currentUserDB.getRole().getName());
+            
+            String roleName = null;
+            if (currentUserDB.getRoleId() != null) {
+                restaurant.example.restaurant.redis.model.Role role = roleRepository.findById(currentUserDB.getRoleId()).orElse(null);
+                roleName = role != null ? role.getName() : null;
+            }
+            userGetAccount.setRole(roleName);
+            
             userGetAccount.setPhone(currentUserDB.getPhone());
-            userGetAccount.setGender(currentUserDB.getGender().name());
+            userGetAccount.setGender(currentUserDB.getGender() != null ? currentUserDB.getGender().name() : null);
             userGetAccount.setAddress(currentUserDB.getAddress());
             userGetAccount.setAddressParts(AddressHelper.split(currentUserDB.getAddress()));
         }
@@ -175,11 +192,9 @@ public class AuthController {
         if (refresh_token.equals("abc")) {
             throw new IdInvalidException("Bạn không có refresh token ở cookies");
         }
-        // check valid
         Jwt decodeToken = this.securityUtil.checkValidRefreshToken(refresh_token);
         String email = decodeToken.getSubject();
 
-        // check use by token and email
         User currentUser = this.userService.getUserByRefreshTokenAndEmail(refresh_token, email);
         if (currentUser == null) {
             throw new IdInvalidException("refresh token không hợp lệ");
@@ -188,11 +203,16 @@ public class AuthController {
         User currentUserDB = this.userService.handelGetUserByUsername(email);
 
         if (currentUserDB != null) {
+            String roleName = null;
+            if (currentUserDB.getRoleId() != null) {
+                restaurant.example.restaurant.redis.model.Role role = roleRepository.findById(currentUserDB.getRoleId()).orElse(null);
+                roleName = role != null ? role.getName() : null;
+            }
             ResLoginDTO.UserLogin userLogin = new ResLoginDTO.UserLogin(
                     currentUserDB.getId(),
-                    currentUserDB.getEmail(),
                     currentUserDB.getUsername(),
-                    currentUserDB.getRole());
+                    currentUserDB.getEmail(),
+                    roleName);
             res.setUser(userLogin);
         }
 
@@ -200,11 +220,8 @@ public class AuthController {
         res.setAccessToken(access_token);
 
         String newRefreshToken = this.securityUtil.createRefreshToken(email, res);
-
-        // update user
         this.userService.updateUserToken(newRefreshToken, email);
 
-        // set cookies
         ResponseCookie responseCookies = ResponseCookie
                 .from("refresh_token", newRefreshToken).httpOnly(true)
                 .secure(cookieSecure)
@@ -327,7 +344,6 @@ public class AuthController {
             throw new IdInvalidException("Tài khoản không tồn tại");
         }
         
-        // User chỉ có thể xem sessions của chính mình
         List<ResSessionInfoDTO> sessions = sessionService.getUserSessions(currentUser.getId(), currentSessionId);
         return ResponseEntity.ok(sessions);
     }
@@ -345,7 +361,6 @@ public class AuthController {
             throw new IdInvalidException("Tài khoản không tồn tại");
         }
         
-        // User chỉ có thể logout sessions của chính mình
         boolean deleted = sessionService.deleteUserSession(currentUser.getId(), sessionId);
         if (!deleted) {
             throw new IdInvalidException("Session không tồn tại hoặc không thuộc về bạn");
@@ -367,7 +382,6 @@ public class AuthController {
             throw new IdInvalidException("Tài khoản không tồn tại");
         }
         
-        // User chỉ có thể block devices của chính mình
         sessionService.blockDeviceBySessionId(sessionId);
         
         return ResponseEntity.ok().build();
@@ -386,7 +400,6 @@ public class AuthController {
             throw new IdInvalidException("Tài khoản không tồn tại");
         }
         
-        // User chỉ có thể unblock devices của chính mình
         sessionService.unblockDeviceBySessionId(sessionId);
         
         return ResponseEntity.ok().build();

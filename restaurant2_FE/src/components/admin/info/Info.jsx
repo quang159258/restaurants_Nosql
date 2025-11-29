@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import bg1 from '../../../assets/img/bg_1.jpg.webp'; // vẫn giữ hình nền
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../context/auth.context';
-import { updateUserApi, changePassword } from '../../../services/api.service';
+import { updateUserApi, changePassword, getAccountAPI } from '../../../services/api.service';
 import Notification from '../../noti/Notification';
 import AddressSelector from '../../common/AddressSelector';
 
@@ -61,19 +61,24 @@ export const InfoPageAdmin = () => {
         reader.readAsDataURL(file);
     };
     const handleSubmit = async () => {
-        debugger
-        const res = await updateUserApi(user.id, userName, gender, phone, address);
-        if (res.data) {
-            addNotification("Update success", "Cập nhật thông tin thành công", "success");
-            setUser(res.data);
-            console.log("check ", userName, gender, phone, address)
-
-            setTimeout(() => {
-                navigate("/");
-            }, 2000)
-        } else {
-            addNotification("Update fall", res.error, "error");
-
+        try {
+            const res = await updateUserApi(user.id, userName, gender, phone, address);
+            if (res && res.data) {
+                // Fetch updated user info to get full user object
+                const accountRes = await getAccountAPI();
+                if (accountRes && accountRes.data) {
+                    setUser(accountRes.data);
+                }
+                addNotification("Update success", "Cập nhật thông tin thành công", "success");
+                setTimeout(() => {
+                    navigate("/");
+                }, 2000);
+            } else {
+                addNotification("Update fall", res?.error || "Đã xảy ra lỗi", "error");
+            }
+        } catch (error) {
+            console.error("Update error:", error);
+            addNotification("Update fall", error?.response?.data?.message || "Đã xảy ra lỗi", "error");
         }
     }
 
@@ -92,7 +97,7 @@ export const InfoPageAdmin = () => {
         }
         try {
             setPasswordLoading(true);
-            await changePassword({ currentPassword, newPassword });
+            await changePassword({ currentPassword, newPassword, confirmPassword });
             addNotification("Thành công", "Đã đổi mật khẩu", "success");
             setCurrentPassword("");
             setNewPassword("");

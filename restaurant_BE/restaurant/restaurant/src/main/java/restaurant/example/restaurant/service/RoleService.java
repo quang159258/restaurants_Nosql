@@ -1,79 +1,114 @@
 package restaurant.example.restaurant.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.domain.Permission;
-import restaurant.example.restaurant.domain.Role;
+import restaurant.example.restaurant.redis.model.Permission;
+import restaurant.example.restaurant.redis.model.Role;
 import restaurant.example.restaurant.domain.request.ReqRoleDTO;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
-import restaurant.example.restaurant.repository.PermissionRepository;
-import restaurant.example.restaurant.repository.RoleRepository;
+import restaurant.example.restaurant.redis.repository.PermissionRepository;
+import restaurant.example.restaurant.redis.repository.RoleRepository;
 
 @Service
 public class RoleService {
-    private final RoleRepository roleRepository;
-    private final PermissionRepository permissionRepository;
-
-    public RoleService(
-            RoleRepository roleRepository,
-            PermissionRepository permissionRepository) {
-        this.roleRepository = roleRepository;
-        this.permissionRepository = permissionRepository;
-    }
+    @Autowired
+    private RoleRepository roleRepository;
+    
+    @Autowired
+    private PermissionRepository permissionRepository;
 
     public boolean existByName(String name) {
         return this.roleRepository.existsByName(name);
     }
 
     public Role create(Role r) {
-        // check permissions
-        if (r.getPermissions() != null) {
-            List<Long> reqPermissions = r.getPermissions()
-                    .stream().map(x -> x.getId())
+        if (r.getPermissionIds() == null) {
+            r.setPermissionIds(new ArrayList<>());
+        }
+        if (r.getPermissions() != null && !r.getPermissions().isEmpty()) {
+            List<String> permissionIds = r.getPermissions().stream()
+                    .map(Permission::getId)
                     .collect(Collectors.toList());
-            List<Permission> dbPermissions = this.permissionRepository.findByIdIn(reqPermissions);
-            r.setPermissions(dbPermissions);
+            r.setPermissionIds(permissionIds);
         }
         return this.roleRepository.save(r);
     }
 
-    public Role fetchById(long id) {
+    public Role fetchById(String id) {
         Optional<Role> roleOptional = this.roleRepository.findById(id);
-        if (roleOptional.isPresent())
-            return roleOptional.get();
+        if (roleOptional.isPresent()) {
+            Role role = roleOptional.get();
+            
+            List<String> permissionIds = roleRepository.findPermissionIdsByRoleId(role.getId());
+            role.setPermissionIds(permissionIds);
+            
+            if (permissionIds != null && !permissionIds.isEmpty()) {
+                List<Permission> permissions = permissionRepository.findByIdIn(permissionIds);
+                role.setPermissions(permissions);
+            } else {
+                role.setPermissions(new ArrayList<>());
+            }
+            
+            return role;
+        }
         return null;
     }
 
     public Role update(Role r) {
         Role roleDB = this.fetchById(r.getId());
-        // check permissions
-        if (r.getPermissions() != null) {
-            List<Long> reqPermissions = r.getPermissions()
-                    .stream().map(x -> x.getId())
-                    .collect(Collectors.toList());
-            List<Permission> dbPermissions = this.permissionRepository.findByIdIn(reqPermissions);
-            r.setPermissions(dbPermissions);
+        if (roleDB == null) {
+            throw new RuntimeException("Role not found with id: " + r.getId());
         }
+        
         roleDB.setName(r.getName());
         roleDB.setDescription(r.getDescription());
-        roleDB.setPermissions(r.getPermissions());
+        
+        if (r.getPermissionIds() != null) {
+            roleDB.setPermissionIds(r.getPermissionIds());
+        } else if (r.getPermissions() != null) {
+            List<String> permissionIds = r.getPermissions().stream()
+                    .map(Permission::getId)
+                    .collect(Collectors.toList());
+            roleDB.setPermissionIds(permissionIds);
+        } else {
+            roleDB.setPermissionIds(new ArrayList<>());
+        }
+        
         roleDB = this.roleRepository.save(roleDB);
         return roleDB;
     }
 
-    public void delete(long id) {
+    public void delete(String id) {
         this.roleRepository.deleteById(id);
     }
 
-    public ResultPaginationDataDTO getRoles(Specification<Role> spec, Pageable pageable) {
-        Page<Role> pRole = this.roleRepository.findAll(spec, pageable);
+    public ResultPaginationDataDTO getRoles(Pageable pageable) {
+        Page<Role> pRole = this.roleRepository.findAll(pageable);
+        
+        List<Role> rolesWithPermissions = pRole.getContent().stream()
+                .map(role -> {
+                    List<String> permissionIds = roleRepository.findPermissionIdsByRoleId(role.getId());
+                    role.setPermissionIds(permissionIds);
+                    
+                    if (permissionIds != null && !permissionIds.isEmpty()) {
+                        List<Permission> permissions = permissionRepository.findByIdIn(permissionIds);
+                        role.setPermissions(permissions);
+                    } else {
+                        role.setPermissions(new ArrayList<>());
+                    }
+                    
+                    return role;
+                })
+                .collect(Collectors.toList());
+        
         ResultPaginationDataDTO rs = new ResultPaginationDataDTO();
         ResultPaginationDataDTO.Meta mt = new ResultPaginationDataDTO.Meta();
         mt.setPage(pageable.getPageNumber() + 1);
@@ -81,7 +116,7 @@ public class RoleService {
         mt.setPages(pRole.getTotalPages());
         mt.setTotal(pRole.getTotalElements());
         rs.setMeta(mt);
-        rs.setResult(pRole.getContent());
+        rs.setResult(rolesWithPermissions);
         return rs;
     }
 
@@ -90,17 +125,25 @@ public class RoleService {
         role.setName(reqRole.getName());
         role.setDescription(reqRole.getDescription());
         
-        // Set permissions from permissionIds
+        role = this.roleRepository.save(role);
+        
+        List<String> permissionIds = new ArrayList<>();
         if (reqRole.getPermissionIds() != null && !reqRole.getPermissionIds().isEmpty()) {
-            List<Permission> dbPermissions = this.permissionRepository.findByIdIn(reqRole.getPermissionIds());
-            role.setPermissions(dbPermissions);
+            permissionIds = reqRole.getPermissionIds().stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.toList());
+        }
+        role.setPermissionIds(permissionIds);
+        
+        if (!permissionIds.isEmpty()) {
+            this.roleRepository.addPermissionsToRole(role.getId(), permissionIds);
         }
         
-        return this.roleRepository.save(role);
+        return role;
     }
 
     public Role updateFromDTO(ReqRoleDTO reqRole) {
-        Role roleDB = this.fetchById(reqRole.getId());
+        Role roleDB = this.fetchById(String.valueOf(reqRole.getId()));
         if (roleDB == null) {
             return null;
         }
@@ -108,14 +151,18 @@ public class RoleService {
         roleDB.setName(reqRole.getName());
         roleDB.setDescription(reqRole.getDescription());
         
-        // Update permissions from permissionIds
-        if (reqRole.getPermissionIds() != null) {
-            List<Permission> dbPermissions = this.permissionRepository.findByIdIn(reqRole.getPermissionIds());
-            roleDB.setPermissions(dbPermissions);
-        } else {
-            roleDB.setPermissions(null);
-        }
+        roleDB = this.roleRepository.save(roleDB);
         
-        return this.roleRepository.save(roleDB);
+        List<String> permissionIds = new ArrayList<>();
+        if (reqRole.getPermissionIds() != null) {
+            permissionIds = reqRole.getPermissionIds().stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.toList());
+        }
+        roleDB.setPermissionIds(permissionIds);
+        
+        this.roleRepository.updatePermissionsForRole(roleDB.getId(), permissionIds);
+        
+        return roleDB;
     }
 }

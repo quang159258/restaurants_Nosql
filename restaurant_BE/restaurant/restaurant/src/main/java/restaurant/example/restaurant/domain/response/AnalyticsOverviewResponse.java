@@ -1,48 +1,31 @@
 package restaurant.example.restaurant.domain.response;
 
+import lombok.Data;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class AnalyticsOverviewResponse {
-    private Double totalRevenue;
-    private Long totalOrders;
-    private Long pendingOrders;
-    private Long confirmedOrders;
-    private Long deliveringOrders;
-    private Long deliveredOrders;
-    private Long cancelledOrders;
-    private Long unpaidOrders;
-    private Double averageOrderValue;
-    private Long newCustomers;
+    private BigDecimal totalRevenue;
+    private long totalOrders;
+    private long totalCustomers;
+    private long totalDishesSold;
     private List<DailyRevenuePoint> revenueTrend;
     private List<TopDish> topDishes;
 
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data
     public static class DailyRevenuePoint {
         private LocalDate date;
-        private Double revenue;
+        private BigDecimal revenue;
+        private long orderCount;
     }
 
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data
     public static class TopDish {
+        private String dishId;
         private String dishName;
-        private Long quantity;
-        private Double revenue;
+        private long quantitySold;
+        private BigDecimal totalRevenue;
     }
 }
-
