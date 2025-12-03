@@ -21,8 +21,8 @@ const IndexPage = () => {
             try {
                 setLoading(true);
                 
-                // Fetch all dishes to get soldToday
-                const dishesRes = await fetchAllDish(1, 1000, 1);
+                // Fetch all dishes to get soldToday (không filter theo category)
+                const dishesRes = await fetchAllDish(1, 1000, null);
                 const dishesData = dishesRes?.data?.result || dishesRes?.data || [];
                 
                 // Sort by soldToday for today's top dishes

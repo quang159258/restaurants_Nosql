@@ -19,4 +19,5 @@ public class ResSessionInfoDTO {
     private Instant createdAt;
     private Instant lastAccessAt;
     private boolean current;
+    private boolean active; // Thêm field để xác định session có đang active không
 }

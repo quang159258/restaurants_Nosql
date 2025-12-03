@@ -25,12 +25,19 @@ const InventoryManagement = () => {
     const fetchDishes = async () => {
         setLoading(true);
         try {
-            const res = await fetchAllDish(1, 100, 1);
-            if (res.data) {
-                setDishes(res.data);
+            // Không filter theo category, lấy tất cả dishes
+            const res = await fetchAllDish(1, 100, null);
+            const data = res?.data ?? res;
+            if (data?.result && Array.isArray(data.result)) {
+                setDishes(data.result);
+            } else if (Array.isArray(data)) {
+                setDishes(data);
+            } else {
+                setDishes([]);
             }
         } catch (error) {
             console.error('Lỗi khi lấy danh sách sản phẩm:', error);
+            setDishes([]);
         } finally {
             setLoading(false);
         }

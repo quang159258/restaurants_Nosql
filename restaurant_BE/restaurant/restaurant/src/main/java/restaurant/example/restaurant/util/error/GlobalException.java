@@ -4,13 +4,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import restaurant.example.restaurant.domain.response.RestResponse;
 
-// quản lý exception toàn bộ controller và trả về định dạng
 @RestControllerAdvice
 public class GlobalException {
     @ExceptionHandler(value = {
@@ -23,6 +24,29 @@ public class GlobalException {
         res.setStatusCode(HttpStatus.BAD_REQUEST.value());
         res.setError(ex.getMessage());
         res.setMessage("Exception occurs...");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
+    }
+    
+    @ExceptionHandler(value = {
+            MethodArgumentNotValidException.class,
+    })
+    public ResponseEntity<RestResponse<Object>> handleValidationException(MethodArgumentNotValidException ex) {
+        RestResponse<Object> res = new RestResponse<Object>();
+        res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+        
+        FieldError fieldError = ex.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .orElse(null);
+        
+        if (fieldError != null) {
+            String errorMessage = fieldError.getDefaultMessage();
+            res.setError(errorMessage != null ? errorMessage : "Validation failed");
+            res.setMessage("Validation failed for field: " + fieldError.getField());
+        } else {
+            res.setError("Validation failed");
+            res.setMessage("Invalid request data");
+        }
+        
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
     }
 
@@ -94,7 +118,26 @@ public class GlobalException {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
     }
 
-    // Handler cho tất cả các exception khác (bao gồm springfilter errors)
+    @ExceptionHandler(value = {
+            RuntimeException.class,
+    })
+    public ResponseEntity<RestResponse<Object>> handleRuntimeException(RuntimeException ex) {
+        RestResponse<Object> res = new RestResponse<Object>();
+        
+        if (ex.getMessage() != null && ex.getMessage().contains("Unauthorized")) {
+            res.setStatusCode(HttpStatus.UNAUTHORIZED.value());
+            res.setError(ex.getMessage());
+            res.setMessage("Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(res);
+        }
+        
+        res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        res.setError(ex.getMessage());
+        res.setMessage("Internal server error");
+        ex.printStackTrace();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(res);
+    }
+
     @ExceptionHandler(value = {
             Exception.class,
     })
@@ -103,7 +146,6 @@ public class GlobalException {
         res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
         res.setError(ex.getMessage());
         res.setMessage("Internal server error");
-        // Log full stack trace để debug
         ex.printStackTrace();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(res);
     }

@@ -177,7 +177,7 @@ const DeviceList = () => {
                 renderItem={(session) => (
                     <List.Item
                         actions={[
-                            session.isCurrent ? (
+                            (session.current || session.isCurrent) ? (
                                 <Tag color="green" icon={<CheckCircleOutlined />}>
                                     Thiết bị này
                                 </Tag>
@@ -202,17 +202,25 @@ const DeviceList = () => {
                     >
                         <List.Item.Meta
                             avatar={
-                                <div style={{ fontSize: '24px', color: session.isCurrent ? '#52c41a' : '#1890ff' }}>
+                                <div style={{ 
+                                    fontSize: '24px', 
+                                    color: (session.current || session.isCurrent) ? '#52c41a' : 
+                                           (session.active ? '#1890ff' : '#8c8c8c')
+                                }}>
                                     {getDeviceIcon(session.userAgent)}
                                 </div>
                             }
                             title={
                                 <Space>
                                     <Text strong>{session.deviceInfo || 'Unknown Device'}</Text>
-                                    {session.isCurrent && (
+                                    {(session.current || session.isCurrent) ? (
                                         <Tag color="green" icon={<CheckCircleOutlined />}>
                                             Đang sử dụng
                                         </Tag>
+                                    ) : session.active ? (
+                                        <Tag color="blue">Đang hoạt động</Tag>
+                                    ) : (
+                                        <Tag color="default">Không hoạt động</Tag>
                                     )}
                                 </Space>
                             }

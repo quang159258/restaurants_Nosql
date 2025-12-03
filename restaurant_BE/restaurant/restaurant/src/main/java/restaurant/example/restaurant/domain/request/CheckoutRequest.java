@@ -1,5 +1,6 @@
 package restaurant.example.restaurant.domain.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -10,7 +11,6 @@ import lombok.Data;
 
 import java.util.List;
 
-@Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CheckoutRequest {
     private List<CartItemRequest> items;
@@ -32,6 +32,7 @@ public class CheckoutRequest {
     private String paymentMethod;
     private String note;
     
+    // Getters - chỉ dùng getReceiver* để tránh conflict với Lombok
     public String getReceiverName() {
         return customerName;
     }
@@ -46,6 +47,47 @@ public class CheckoutRequest {
     
     public String getReceiverEmail() {
         return customerEmail;
+    }
+    
+    // Setters
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
+    }
+    
+    public void setCustomerEmail(String customerEmail) {
+        this.customerEmail = customerEmail;
+    }
+    
+    public void setCustomerPhone(String customerPhone) {
+        this.customerPhone = customerPhone;
+    }
+    
+    public void setDeliveryAddress(String deliveryAddress) {
+        this.deliveryAddress = deliveryAddress;
+    }
+    
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+    
+    public void setNote(String note) {
+        this.note = note;
+    }
+    
+    public void setItems(List<CartItemRequest> items) {
+        this.items = items;
+    }
+    
+    public List<CartItemRequest> getItems() {
+        return items;
+    }
+    
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+    
+    public String getNote() {
+        return note;
     }
     
     @Data

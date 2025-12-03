@@ -28,7 +28,6 @@ public class CategoryRepository extends BaseRedisRepository {
         String key = CATEGORY_PREFIX + category.getId();
         redisTemplate.opsForValue().set(key, category);
         
-        // Add to list
         redisTemplate.opsForSet().add(CATEGORY_LIST, category.getId());
         
         return category;
@@ -53,9 +52,7 @@ public class CategoryRepository extends BaseRedisRepository {
     }
     
     public void deleteById(String id) {
-        // Remove from list
         redisTemplate.opsForSet().remove(CATEGORY_LIST, id);
-        // Delete entity
         redisTemplate.delete(CATEGORY_PREFIX + id);
     }
     

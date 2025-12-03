@@ -41,14 +41,21 @@ const PaymentResult = () => {
         } else {
             addNotification('Thanh toán thất bại', 'Giao dịch không thành công', 'error');
         }
-    }, [searchParams]);
+
+        // Auto redirect về /order sau khi thanh toán thành công
+        if (status === 'success') {
+            setTimeout(() => {
+                navigate('/order', { state: { orderId } });
+            }, 2000);
+        }
+    }, [searchParams, navigate]);
 
     const handleContinueShopping = () => {
         navigate('/');
     };
 
     const handleViewOrders = () => {
-        navigate('/order');
+        navigate('/order', { state: { orderId: orderInfo?.orderId } });
     };
 
     if (paymentStatus === 'success') {

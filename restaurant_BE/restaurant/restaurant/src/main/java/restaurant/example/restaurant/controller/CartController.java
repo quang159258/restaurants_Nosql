@@ -142,7 +142,7 @@ public class CartController {
         return ResponseEntity.ok(null);
     }
 
-    @PostMapping(value = "/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping("/checkout")
     @ApiMessage("Checkout cart")
     public ResponseEntity<CheckoutResponse> checkoutCart(@RequestBody CheckoutRequest request,
             HttpServletRequest servletRequest) throws CartException {
@@ -173,8 +173,12 @@ public class CartController {
                 request.getReceiverAddress(),
                 request.getReceiverEmail(),
                 paymentMethod);
+        
+        // CHỈ XÓA CART ITEMS (CartDetail), KHÔNG XÓA DISH
+        // Dish chỉ được cập nhật tồn kho trong OrderService.createOrderFromCart()
         if (cart.getItems() != null) {
             for (CartDetail detail : cart.getItems()) {
+                // Chỉ xóa CartDetail, không xóa Dish
                 cartDetailService.handleDeleteByID(detail.getId());
             }
         }

@@ -26,7 +26,6 @@ public class CartRepository extends BaseRedisRepository {
         String key = CART_PREFIX + cart.getId();
         redisTemplate.opsForValue().set(key, cart);
         
-        // Update user index
         if (cart.getUserId() != null) {
             redisTemplate.opsForValue().set(
                 CART_INDEX_USER + cart.getUserId(),
@@ -58,12 +57,10 @@ public class CartRepository extends BaseRedisRepository {
     public void deleteById(String id) {
         Cart cart = findById(id).orElse(null);
         if (cart != null) {
-            // Remove from user index
             if (cart.getUserId() != null) {
                 redisTemplate.delete(CART_INDEX_USER + cart.getUserId());
                 redisTemplate.delete(USER_CART + cart.getUserId() + ":cart");
             }
-            // Delete entity
             redisTemplate.delete(CART_PREFIX + id);
         }
     }

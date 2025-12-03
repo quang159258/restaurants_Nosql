@@ -48,7 +48,7 @@ public class SessionService {
     /**
      * Kiểm tra xem thiết bị có bị chặn không
      */
-    public boolean isDeviceBlocked(Long userId, String userAgent, String clientIp) {
+    public boolean isDeviceBlocked(String userId, String userAgent, String clientIp) {
         try {
             String deviceFingerprint = generateDeviceFingerprint(userAgent, clientIp);
             String blockedDevicesKey = blockedDevicesKey(userId);
@@ -63,7 +63,7 @@ public class SessionService {
     /**
      * Chặn một thiết bị của user
      */
-    public void blockDevice(Long userId, String userAgent, String clientIp) {
+    public void blockDevice(String userId, String userAgent, String clientIp) {
         try {
             String deviceFingerprint = generateDeviceFingerprint(userAgent, clientIp);
             String blockedDevicesKey = blockedDevicesKey(userId);
@@ -96,7 +96,7 @@ public class SessionService {
     /**
      * Bỏ chặn một thiết bị của user
      */
-    public void unblockDevice(Long userId, String userAgent, String clientIp) {
+    public void unblockDevice(String userId, String userAgent, String clientIp) {
         try {
             String deviceFingerprint = generateDeviceFingerprint(userAgent, clientIp);
             String blockedDevicesKey = blockedDevicesKey(userId);
@@ -126,7 +126,7 @@ public class SessionService {
     /**
      * Lấy danh sách các thiết bị bị chặn của user
      */
-    public Set<String> getBlockedDevices(Long userId) {
+    public Set<String> getBlockedDevices(String userId) {
         try {
             String blockedDevicesKey = blockedDevicesKey(userId);
             SetOperations<String, String> setOps = stringRedisTemplate.opsForSet();
@@ -140,7 +140,7 @@ public class SessionService {
     /**
      * Xóa tất cả thiết bị bị chặn của user
      */
-    public void unblockAllDevices(Long userId) {
+    public void unblockAllDevices(String userId) {
         try {
             String blockedDevicesKey = blockedDevicesKey(userId);
             stringRedisTemplate.delete(blockedDevicesKey);
@@ -178,7 +178,7 @@ public class SessionService {
     /**
      * Xóa tất cả sessions của một thiết bị cụ thể
      */
-    private void deleteSessionsForDevice(Long userId, String deviceFingerprint) {
+    private void deleteSessionsForDevice(String userId, String deviceFingerprint) {
         try {
             String key = userSessionsKey(userId);
             List<String> sessionIds = stringRedisTemplate.opsForList().range(key, 0, -1);
@@ -198,18 +198,20 @@ public class SessionService {
         }
     }
 
-    public String createSession(Long userId, String userAgent, String clientIp) {
-        // Kiểm tra xem thiết bị có bị chặn không
-        if (isDeviceBlocked(userId, userAgent, clientIp)) {
-            log.warn("Login attempt blocked for user {} from blocked device", userId);
-            throw new SecurityException("Thiết bị này đã bị chặn đăng nhập");
-        }
+    public String createSession(String userId, String userAgent, String clientIp) {
+        // Tạm thời bỏ qua device blocking check
+        // if (isDeviceBlocked(userId, userAgent, clientIp)) {
+        //     log.warn("Login attempt blocked for user {} from blocked device", userId);
+        //     throw new SecurityException("Thiết bị này đã bị chặn đăng nhập");
+        // }
         
         String sessionId = UUID.randomUUID().toString();
-        UserSessionData data = new UserSessionData(userId, Instant.now(), Instant.now(), userAgent, clientIp);
+        Instant now = Instant.now();
+        UserSessionData data = new UserSessionData(userId, now, now, userAgent, clientIp);
         try {
             ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-            ops.set(sessionKey(sessionId), data, Duration.ofSeconds(SESSION_DURATION));
+            // Bỏ TTL - lưu vĩnh viễn
+            ops.set(sessionKey(sessionId), data);
             registerSessionForUser(userId, sessionId);
         } catch (Exception e) {
             log.warn("Redis unavailable, session created without cache: {}", sessionId, e);
@@ -217,7 +219,7 @@ public class SessionService {
         return sessionId;
     }
 
-    public Long getUserIdFromSession(String sessionId) {
+    public String getUserIdFromSession(String sessionId) {
         try {
             UserSessionData data = getSessionData(sessionId);
             if (data != null) {
@@ -249,7 +251,7 @@ public class SessionService {
         }
     }
 
-    public void deleteAllSessionsForUser(Long userId) {
+    public void deleteAllSessionsForUser(String userId) {
         try {
             String key = userSessionsKey(userId);
             List<String> sessionIds = stringRedisTemplate.opsForList().range(key, 0, -1);
@@ -275,7 +277,7 @@ public class SessionService {
     }
 
     
-    public List<ResSessionInfoDTO> getUserSessions(Long userId, String currentSessionId) {
+    public List<ResSessionInfoDTO> getUserSessions(String userId, String currentSessionId) {
         List<ResSessionInfoDTO> sessions = new ArrayList<>();
         try {
             String key = userSessionsKey(userId);
@@ -285,18 +287,36 @@ public class SessionService {
                 return sessions;
             }
             
+            Instant now = Instant.now();
+            // Thời gian inactive threshold: 30 phút
+            long inactiveThresholdSeconds = 30 * 60;
+            
             for (String sessionId : sessionIds) {
                 UserSessionData data = getSessionData(sessionId);
-                if (data != null && data.getUserId().equals(userId)) {
+                if (data != null && data.getUserId() != null && data.getUserId().equals(userId)) {
                     ResSessionInfoDTO sessionInfo = new ResSessionInfoDTO();
                     sessionInfo.setSessionId(sessionId);
                     sessionInfo.setClientIp(data.getClientIp());
                     sessionInfo.setUserAgent(data.getUserAgent());
                     sessionInfo.setDeviceInfo(parseUserAgent(data.getUserAgent()));
                     sessionInfo.setLocation("Unknown"); // Có thể tích hợp IP geolocation service
-                    sessionInfo.setCreatedAt(data.getCreatedAt());
-                    sessionInfo.setLastAccessAt(data.getLastAccessAt());
-                    sessionInfo.setCurrent(sessionId.equals(currentSessionId));
+                    
+                    // Set datetime - đảm bảo không null
+                    Instant createdAt = data.getCreatedAt() != null ? data.getCreatedAt() : Instant.now();
+                    Instant lastAccessAt = data.getLastAccessAt() != null ? data.getLastAccessAt() : Instant.now();
+                    
+                    sessionInfo.setCreatedAt(createdAt);
+                    sessionInfo.setLastAccessAt(lastAccessAt);
+                    
+                    // Xác định state: active nếu lastAccessAt trong vòng 30 phút, hoặc là current session
+                    boolean isCurrent = sessionId.equals(currentSessionId);
+                    boolean isActive = isCurrent || (lastAccessAt != null && 
+                        (now.getEpochSecond() - lastAccessAt.getEpochSecond()) < inactiveThresholdSeconds);
+                    
+                    sessionInfo.setCurrent(isCurrent);
+                    // Note: isCurrentSession field is deprecated, use 'current' instead
+                    sessionInfo.setActive(isActive);
+                    
                     sessions.add(sessionInfo);
                 }
             }
@@ -306,7 +326,7 @@ public class SessionService {
         return sessions;
     }
 
-    public boolean deleteUserSession(Long userId, String sessionId) {
+    public boolean deleteUserSession(String userId, String sessionId) {
         try {
             UserSessionData data = getSessionData(sessionId);
             if (data != null && data.getUserId().equals(userId)) {
@@ -377,7 +397,7 @@ public class SessionService {
         return String.format("%s on %s", browser, os);
     }
 
-    private void registerSessionForUser(Long userId, String sessionId) {
+    private void registerSessionForUser(String userId, String sessionId) {
         try {
             BoundListOperations<String, String> listOps = stringRedisTemplate.boundListOps(userSessionsKey(userId));
             listOps.leftPush(sessionId);
@@ -409,7 +429,8 @@ public class SessionService {
     private void refreshSession(String sessionId, UserSessionData data) {
         try {
             data.setLastAccessAt(Instant.now());
-            redisTemplate.opsForValue().set(sessionKey(sessionId), data, Duration.ofSeconds(SESSION_DURATION));
+            // Bỏ TTL - lưu vĩnh viễn
+            redisTemplate.opsForValue().set(sessionKey(sessionId), data);
         } catch (Exception e) {
             log.warn("Redis unavailable, cannot refresh session: {}", sessionId, e);
         }
@@ -428,8 +449,9 @@ public class SessionService {
             }
             if (value instanceof Number) {
                 Number number = (Number) value;
-                UserSessionData legacy = new UserSessionData(number.longValue(), Instant.now(), Instant.now(), null, null);
-                ops.set(sessionKey(sessionId), legacy, Duration.ofSeconds(SESSION_DURATION));
+                UserSessionData legacy = new UserSessionData(String.valueOf(number.longValue()), Instant.now(), Instant.now(), null, null);
+                // Bỏ TTL - lưu vĩnh viễn
+                ops.set(sessionKey(sessionId), legacy);
                 return legacy;
             }
         } catch (Exception e) {
@@ -448,7 +470,7 @@ public class SessionService {
         }
         if (value instanceof Map<?, ?> map) {
             Object userIdObj = map.get("userId");
-            Long userId = userIdObj != null ? Long.parseLong(userIdObj.toString()) : null;
+            String userId = userIdObj != null ? userIdObj.toString() : null;
             Instant createdAt = parseInstant(map.get("createdAt"));
             Instant lastAccessAt = parseInstant(map.get("lastAccessAt"));
             String userAgent = map.get("userAgent") != null ? map.get("userAgent").toString() : null;
@@ -476,11 +498,11 @@ public class SessionService {
         return SESSION_PREFIX + sessionId;
     }
 
-    private String userSessionsKey(Long userId) {
+    private String userSessionsKey(String userId) {
         return USER_SESSION_PREFIX + userId;
     }
 
-    private String blockedDevicesKey(Long userId) {
+    private String blockedDevicesKey(String userId) {
         return BLOCKED_DEVICES_PREFIX + userId;
     }
 }

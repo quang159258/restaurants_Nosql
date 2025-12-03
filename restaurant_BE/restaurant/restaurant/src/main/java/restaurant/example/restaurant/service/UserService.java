@@ -4,45 +4,41 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import restaurant.example.restaurant.domain.Role;
-import restaurant.example.restaurant.domain.User;
+import restaurant.example.restaurant.redis.model.Role;
+import restaurant.example.restaurant.redis.model.User;
 import restaurant.example.restaurant.domain.response.ResCreateUserDTO;
 import restaurant.example.restaurant.domain.response.ResUpdateUserDTO;
 import restaurant.example.restaurant.domain.response.ResUserDTO;
 import restaurant.example.restaurant.domain.response.ResultPaginationDataDTO;
-import restaurant.example.restaurant.repository.RoleRepository;
-import restaurant.example.restaurant.repository.UserRepository;
+import restaurant.example.restaurant.redis.repository.RoleRepository;
+import restaurant.example.restaurant.redis.repository.UserRepository;
 import restaurant.example.restaurant.util.constant.GenderEnum;
-
-import org.springframework.data.domain.Page;
 
 @Service
 public class UserService {
-    UserRepository userRepository;
-    private final RoleService roleService;
-    private final RoleRepository roleRepository;
-    private final CacheService cacheService;
-
-    public UserService(UserRepository userRepository,
-            RoleService roleService,
-            RoleRepository roleRepository,
-            CacheService cacheService) {
-        this.userRepository = userRepository;
-        this.roleService = roleService;
-        this.roleRepository = roleRepository;
-        this.cacheService = cacheService;
-    }
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private RoleService roleService;
+    
+    @Autowired
+    private RoleRepository roleRepository;
+    
+    @Autowired
+    private CacheService cacheService;
 
     public User CreateUser(User newUser) {
         Role userRole = this.roleRepository.findByName("USER");
         if (userRole == null) {
             userRole = this.roleRepository.findByName("SUPER_ADMIN");
         }
-        newUser.setRole(userRole);
+        newUser.setRoleId(userRole != null ? userRole.getId() : null);
         if (newUser.getGender() == null) {
             newUser.setGender(GenderEnum.MALE);
         }
@@ -51,15 +47,15 @@ public class UserService {
         }
         User savedUser = this.userRepository.save(newUser);
         // Cache the saved user
-        cacheService.cacheUser(savedUser.getId(), savedUser);
+        cacheService.cacheUser(Long.parseLong(savedUser.getId()), savedUser);
         // Invalidate list cache
         cacheService.deleteAllUserListCache();
         return savedUser;
     }
 
-    public User handelGetUser(Long id) {
+    public User handelGetUser(String id) {
         // Try to get from cache first
-        Object cachedUser = cacheService.getCachedUser(id);
+        Object cachedUser = cacheService.getCachedUser(Long.parseLong(id));
         if (cachedUser instanceof User) {
             return (User) cachedUser;
         }
@@ -67,27 +63,27 @@ public class UserService {
         // If not in cache, get from database and cache it
         Optional<User> user = this.userRepository.findById(id);
         if (user.isPresent()) {
-            cacheService.cacheUser(id, user.get());
+            cacheService.cacheUser(Long.parseLong(id), user.get());
             return user.get();
         }
         return null;
     }
 
-    public void handelDeleteUser(Long id) {
+    public void handelDeleteUser(String id) {
         this.userRepository.deleteById(id);
-        // Remove from cache
-        cacheService.deleteCachedUser(id);
+        // Không xóa cache vì Redis là DB chính, không phải cache
+        // cacheService.deleteCachedUser(Long.parseLong(id));
         // Invalidate list cache
         cacheService.deleteAllUserListCache();
     }
 
     public User handelUpdateUser(User updateUser) {
-
         Optional<User> optionalUser = this.userRepository.findById(updateUser.getId());
-        User user = new User();
-        if (optionalUser.isPresent()) {
-            user = optionalUser.get();
+        if (optionalUser.isEmpty()) {
+            throw new RuntimeException("User not found with id: " + updateUser.getId());
         }
+        
+        User user = optionalUser.get();
         if (updateUser.getAddress() != null && !updateUser.getAddress().isBlank()) {
             user.setAddress(updateUser.getAddress().trim());
         }
@@ -103,7 +99,7 @@ public class UserService {
 
         User updatedUser = this.userRepository.save(user);
         // Update cache
-        cacheService.cacheUser(updatedUser.getId(), updatedUser);
+        cacheService.cacheUser(Long.parseLong(updatedUser.getId()), updatedUser);
         // Invalidate list cache
         cacheService.deleteAllUserListCache();
         return updatedUser;
@@ -113,12 +109,12 @@ public class UserService {
         return this.userRepository.save(user);
     }
 
-    public ResultPaginationDataDTO handelGetAllUser(Specification<User> spec, Pageable pageable) {
+    public ResultPaginationDataDTO handelGetAllUser(Pageable pageable) {
         // Generate cache key
         String cacheKey = cacheService.generatePaginationKey(
             pageable.getPageNumber(), 
             pageable.getPageSize(),
-            spec != null ? spec.toString() : null
+            null
         );
         
         // Try to get from cache first
@@ -127,7 +123,7 @@ public class UserService {
             return (ResultPaginationDataDTO) cachedResult;
         }
 
-        Page<User> pageUser = this.userRepository.findAll(spec, pageable);
+        Page<User> pageUser = this.userRepository.findAll(pageable);
         ResultPaginationDataDTO rs = new ResultPaginationDataDTO();
         ResultPaginationDataDTO.Meta mt = new ResultPaginationDataDTO.Meta();
 
@@ -164,8 +160,9 @@ public class UserService {
         res.setEmail(user.getEmail());
         res.setName(user.getUsername());
         res.setPhone(user.getPhone());
-        res.setCreatedAt(user.getCreatedAt());
-        res.setGender(user.getGender());
+        res.setCreatedAt(user.getCreatedAt() != null ? 
+            user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() : null);
+        res.setGender(user.getGender() != null ? user.getGender().name() : null);
         res.setAddress(user.getAddress());
         return res;
     }
@@ -176,11 +173,19 @@ public class UserService {
         res.setEmail(user.getEmail());
         res.setName(user.getUsername());
         res.setPhone(user.getPhone());
-        res.setUpdatedAt(user.getUpdatedAt());
-        res.setCreatedAt(user.getCreatedAt());
-        res.setGender(user.getGender());
+        res.setUpdatedAt(user.getUpdatedAt() != null ? 
+            user.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() : null);
+        res.setCreatedAt(user.getCreatedAt() != null ? 
+            user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() : null);
+        res.setGender(user.getGender() != null ? user.getGender().name() : null);
         res.setAddress(user.getAddress());
-        res.setRole(user.getRole().getName());
+        
+        // Get role name from roleId
+        if (user.getRoleId() != null) {
+            Role role = roleRepository.findById(user.getRoleId()).orElse(null);
+            res.setRole(role != null ? role.getName() : null);
+        }
+        
         return res;
     }
 
@@ -189,8 +194,9 @@ public class UserService {
         res.setId(user.getId());
         res.setUsername(user.getUsername());
         res.setPhone(user.getPhone());
-        res.setUpdatedAt(user.getUpdatedAt());
-        res.setGender(user.getGender());
+        res.setUpdatedAt(user.getUpdatedAt() != null ? 
+            user.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() : null);
+        res.setGender(user.getGender() != null ? user.getGender().name() : null);
         res.setAddress(user.getAddress());
         return res;
     }
@@ -201,7 +207,7 @@ public class UserService {
             currentUser.setRefreshToken(token);
             User savedUser = this.userRepository.save(currentUser);
             // Update cache
-            cacheService.cacheUser(savedUser.getId(), savedUser);
+            cacheService.cacheUser(Long.parseLong(savedUser.getId()), savedUser);
         }
     }
 

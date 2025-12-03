@@ -34,7 +34,6 @@ public class RoleRepository extends BaseRedisRepository {
         String key = ROLE_PREFIX + role.getId();
         redisTemplate.opsForValue().set(key, role);
         
-        // Update name index
         if (role.getName() != null) {
             redisTemplate.opsForValue().set(
                 ROLE_INDEX_NAME + role.getName(),
@@ -42,7 +41,6 @@ public class RoleRepository extends BaseRedisRepository {
             );
         }
         
-        // Add to list
         redisTemplate.opsForSet().add(ROLE_LIST, role.getId());
         
         return role;
@@ -102,9 +100,7 @@ public class RoleRepository extends BaseRedisRepository {
     
     public void updatePermissionsForRole(String roleId, List<String> permissionIds) {
         String key = ROLE_PERMISSIONS + roleId + ":permissions";
-        // Delete existing permissions
         redisTemplate.delete(key);
-        // Add new permissions
         if (permissionIds != null && !permissionIds.isEmpty()) {
             for (String permissionId : permissionIds) {
                 redisTemplate.opsForSet().add(key, permissionId);
@@ -126,15 +122,11 @@ public class RoleRepository extends BaseRedisRepository {
     public void deleteById(String id) {
         Role role = findById(id).orElse(null);
         if (role != null) {
-            // Remove from name index
             if (role.getName() != null) {
                 redisTemplate.delete(ROLE_INDEX_NAME + role.getName());
             }
-            // Remove permissions relation
             redisTemplate.delete(ROLE_PERMISSIONS + id + ":permissions");
-            // Remove from list
             redisTemplate.opsForSet().remove(ROLE_LIST, id);
-            // Delete entity
             redisTemplate.delete(ROLE_PREFIX + id);
         }
     }

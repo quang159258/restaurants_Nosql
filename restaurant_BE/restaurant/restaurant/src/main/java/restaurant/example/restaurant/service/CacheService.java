@@ -7,7 +7,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -48,22 +47,29 @@ public class CacheService {
     private static final long ANALYTICS_CACHE_DURATION = 300; // 5 minutes for analytics
     
     /**
-     * Cache a single object
+     * Cache a single object (no TTL - permanent)
      */
     public void cacheObject(String key, Object value, long duration) {
         try {
             ValueOperations<String, Object> ops = redisTemplate.opsForValue();
-            ops.set(key, value, Duration.ofSeconds(duration));
+            // Bỏ TTL - lưu vĩnh viễn
+            ops.set(key, value);
         } catch (Exception e) {
             log.warn("Redis unavailable, skipping cache for key: {}", key, e);
         }
     }
     
     /**
-     * Cache a single object with default duration
+     * Cache a single object (no TTL - permanent)
      */
     public void cacheObject(String key, Object value) {
-        cacheObject(key, value, DEFAULT_CACHE_DURATION);
+        try {
+            ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+            // Bỏ TTL - lưu vĩnh viễn
+            ops.set(key, value);
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping cache for key: {}", key, e);
+        }
     }
     
     /**

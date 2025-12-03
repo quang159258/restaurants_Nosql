@@ -71,22 +71,45 @@ const TableDish = () => {
 
     const getDishes = async (pageIndex, pageSize) => {
         try {
-            const res = await fetchAllDish(pageIndex, pageSize, 1);
+            // Không filter theo category, lấy tất cả dishes
+            const res = await fetchAllDish(pageIndex, pageSize, null);
+            console.log("API Response:", res);
+            
             const data = res?.data ?? res;
-            if (data?.result) {
+            console.log("Parsed data:", data);
+            
+            if (data?.result && Array.isArray(data.result)) {
                 setDishes(
                     data.result.map((item) => ({
                         ...item,
                         key: item.id,
                     }))
                 );
-                setPage(data.meta.page);
-                setTotal(data.meta.total);
+                setPage(data.meta?.page || pageIndex);
+                setTotal(data.meta?.total || 0);
             } else if (Array.isArray(data)) {
                 setDishes(data.map((item) => ({ ...item, key: item.id })));
+                setTotal(data.length);
+            } else {
+                console.warn("Unexpected data structure:", data);
+                setDishes([]);
+                setTotal(0);
+                addNotification(
+                    "Cảnh báo", 
+                    "Không thể lấy dữ liệu món ăn. Vui lòng kiểm tra lại.", 
+                    "warning"
+                );
             }
         } catch (error) {
             console.error("Lỗi khi lấy danh sách món ăn:", error);
+            console.error("Error details:", error.response?.data || error.message);
+            setDishes([]);
+            setTotal(0);
+            addNotification(
+                "Lỗi", 
+                error.response?.data?.message || error.message || "Không thể tải danh sách món ăn", 
+                "error"
+            );
         }
     };
 

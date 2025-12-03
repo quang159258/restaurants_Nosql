@@ -194,6 +194,7 @@ public class DishService {
 
     public void handleDeleteDishById(String id) {
         this.dishRepository.deleteById(id);
-        cacheService.deleteCachedDish(Long.parseLong(id));
+        // Không xóa cache vì Redis là DB chính, không phải cache
+        // cacheService.deleteCachedDish(Long.parseLong(id));
     }
 }

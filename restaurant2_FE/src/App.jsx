@@ -42,6 +42,8 @@ import PaymentPage from './pages/client/payment';
 import PaymentManagement from './pages/admin/PaymentManagement';
 import AnalysisPage from './pages/admin/analysis';
 import PaymentResult from './pages/client/payment/VNPayCallback';
+import VNPaySuccess from './pages/client/payment/VNPaySuccess';
+import VNPayFailed from './pages/client/payment/VNPayFailed';
 import SessionManagementPage from './pages/admin/SessionManagementPage';
 
 
@@ -137,6 +139,8 @@ const App = () => {
 
     { path: "/thanks", element: <ThanksPage /> },
     { path: "/payment-result", element: <PaymentResult /> },
+    { path: "/payment/vnpay/success", element: <VNPaySuccess /> },
+    { path: "/payment/vnpay/failed", element: <VNPayFailed /> },
 
     // Auth Pages
     { path: "/login", element: <LoginPage /> },

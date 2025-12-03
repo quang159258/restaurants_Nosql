@@ -34,7 +34,6 @@ public class DishRepository extends BaseRedisRepository {
         String key = DISH_PREFIX + dish.getId();
         redisTemplate.opsForValue().set(key, dish);
         
-        // Update category index
         if (dish.getCategoryId() != null) {
             redisTemplate.opsForSet().add(
                 DISH_INDEX_CATEGORY + dish.getCategoryId(), 
@@ -46,7 +45,6 @@ public class DishRepository extends BaseRedisRepository {
             );
         }
         
-        // Add to list
         redisTemplate.opsForSet().add(DISH_LIST, dish.getId());
         
         return dish;
@@ -101,7 +99,6 @@ public class DishRepository extends BaseRedisRepository {
     public void deleteById(String id) {
         Dish dish = findById(id).orElse(null);
         if (dish != null) {
-            // Remove from category index
             if (dish.getCategoryId() != null) {
                 redisTemplate.opsForSet().remove(
                     DISH_INDEX_CATEGORY + dish.getCategoryId(),
@@ -112,9 +109,7 @@ public class DishRepository extends BaseRedisRepository {
                     id
                 );
             }
-            // Remove from list
             redisTemplate.opsForSet().remove(DISH_LIST, id);
-            // Delete entity
             redisTemplate.delete(DISH_PREFIX + id);
         }
     }

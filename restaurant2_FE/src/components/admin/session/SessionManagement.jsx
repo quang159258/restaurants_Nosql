@@ -228,10 +228,12 @@ const SessionManagement = () => {
             width: 120,
             render: (_, record) => (
                 <Space>
-                    {record.isCurrent ? (
+                    {record.current || record.isCurrent ? (
                         <Tag color="green">Phiên hiện tại</Tag>
-                    ) : (
+                    ) : record.active ? (
                         <Tag color="blue">Đang hoạt động</Tag>
+                    ) : (
+                        <Tag color="default">Không hoạt động</Tag>
                     )}
                 </Space>
             )

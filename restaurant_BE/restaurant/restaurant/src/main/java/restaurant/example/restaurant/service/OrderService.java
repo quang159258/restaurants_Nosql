@@ -18,17 +18,24 @@ import restaurant.example.restaurant.service.notification.NotificationAudience;
 import restaurant.example.restaurant.service.notification.NotificationMessage;
 import restaurant.example.restaurant.service.notification.NotificationService;
 import restaurant.example.restaurant.util.ImageUtils;
+import restaurant.example.restaurant.util.SecurityUtil;
 import restaurant.example.restaurant.util.constant.OrderStatus;
 import restaurant.example.restaurant.util.constant.PaymentMethod;
 import restaurant.example.restaurant.util.constant.PaymentStatus;
 import restaurant.example.restaurant.util.error.OrderException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     @Autowired
     private OrderRepository orderRepository;
@@ -71,6 +78,14 @@ public class OrderService {
         order.setPaymentMethod(paymentMethod != null ? paymentMethod : PaymentMethod.CASH);
         order.setPaymentStatus(PaymentStatus.PAYMENT_UNPAID);
         order.setPaymentRef(null);
+        
+        // Set timestamps
+        Instant now = Instant.now();
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
+        String currentUserEmail = SecurityUtil.getAuthenticatedEmail();
+        order.setCreatedBy(currentUserEmail);
+        order.setUpdatedBy(currentUserEmail);
 
         double total = 0;
         List<CartDetail> cartDetails = cart.getItems() != null ? cart.getItems() : 
@@ -95,18 +110,65 @@ public class OrderService {
             orderDetailRepository.save(detail);
             
             // ==== Cập nhật tồn kho và số lượng bán/ngày ====
+            // QUAN TRỌNG: Chỉ cập nhật tồn kho, KHÔNG XÓA DISH
             Dish dish = dishRepository.findById(cartDetail.getDishId()).orElse(null);
             if (dish != null) {
-                Integer curStock = dish.getStock() == null ? 0 : dish.getStock();
-                Integer curSold = dish.getSoldToday() == null ? 0 : dish.getSoldToday();
-                int sold = (int)cartDetail.getQuantity();
-                dish.setStock(curStock - sold);
-                dish.setSoldToday(curSold + sold);
-                // Lưu lại thay đổi
-                dishRepository.save(dish);
-                
-                // Invalidate dish cache
-                cacheService.deleteCachedDish(Long.parseLong(dish.getId()));
+                try {
+                    // Lưu lại dishId và categoryId trước khi thay đổi để đảm bảo không bị mất
+                    String dishId = dish.getId();
+                    String categoryId = dish.getCategoryId();
+                    
+                    Integer curStock = dish.getStock() == null ? 0 : dish.getStock();
+                    Integer curSold = dish.getSoldToday() == null ? 0 : dish.getSoldToday();
+                    int sold = (int)cartDetail.getQuantity();
+                    
+                    // LOG: Trước khi thay đổi
+                    log.debug("Before update - Dish ID: {}, Name: {}, Current Stock: {}, Sold: {}", 
+                        dishId, dish.getName(), curStock, sold);
+                    
+                    // Chỉ trừ tồn kho, không xóa dish
+                    dish.setStock(curStock - sold);
+                    dish.setSoldToday(curSold + sold);
+                    
+                    // Đảm bảo dishId và categoryId không bị mất
+                    if (dish.getId() == null || dish.getId().isEmpty()) {
+                        dish.setId(dishId);
+                        log.warn("Dish ID was null after setStock, restored to: {}", dishId);
+                    }
+                    if (dish.getCategoryId() == null || dish.getCategoryId().isEmpty()) {
+                        dish.setCategoryId(categoryId);
+                        log.warn("Dish CategoryId was null after setStock, restored to: {}", categoryId);
+                    }
+                    
+                    // LOG: Sau khi thay đổi, trước khi save
+                    log.debug("After update, before save - Dish ID: {}, Name: {}, New Stock: {}, CategoryId: {}", 
+                        dish.getId(), dish.getName(), dish.getStock(), dish.getCategoryId());
+                    
+                    // Lưu lại thay đổi (chỉ cập nhật, không xóa)
+                    Dish savedDish = dishRepository.save(dish);
+                    
+                    // LOG: Sau khi save
+                    if (savedDish == null) {
+                        log.error("ERROR: dishRepository.save() returned null for dish ID: {}", dishId);
+                    } else {
+                        log.debug("Dish saved successfully - ID: {}, Stock: {}, CategoryId: {}", 
+                            savedDish.getId(), savedDish.getStock(), savedDish.getCategoryId());
+                        
+                        // Verify dish still exists after save
+                        Optional<Dish> verifyDish = dishRepository.findById(dishId);
+                        if (!verifyDish.isPresent()) {
+                            log.error("CRITICAL: Dish was deleted after save! Dish ID: {}", dishId);
+                        } else {
+                            log.debug("Verified: Dish still exists after save - ID: {}", dishId);
+                        }
+                    }
+                    
+                    // Invalidate dish cache (chỉ xóa cache, không xóa dish)
+                } catch (Exception e) {
+                    log.error("ERROR: Failed to update dish stock for dish ID: {}, Error: {}", 
+                        dish.getId(), e.getMessage(), e);
+                    // Không throw exception để không làm gián đoạn quá trình tạo order
+                }
                 
                 // Kiểm tra tồn kho thấp sau khi bán hàng
                 if (dish.getStock() <= 10) {
@@ -155,6 +217,15 @@ public class OrderService {
         }
         order.setPaymentStatus(PaymentStatus.PAYMENT_UNPAID);
         order.setPaymentRef(null);
+        
+        // Set timestamps
+        Instant now = Instant.now();
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
+        String currentUserEmail = SecurityUtil.getAuthenticatedEmail();
+        order.setCreatedBy(currentUserEmail);
+        order.setUpdatedBy(currentUserEmail);
+        
         order = orderRepository.save(order);
 
         double total = 0;
@@ -175,7 +246,20 @@ public class OrderService {
             dish.setStock(currentStock - item.getQuantity());
             int soldCount = dish.getSoldToday() == null ? 0 : dish.getSoldToday();
             dish.setSoldToday(soldCount + item.getQuantity());
-            dishRepository.save(dish);
+            
+            // LOG: Đảm bảo dish không bị null trước khi save
+            log.debug("Updating dish stock (Admin) - Dish ID: {}, Name: {}, Old Stock: {}, Sold: {}, New Stock: {}", 
+                dish.getId(), dish.getName(), currentStock, item.getQuantity(), dish.getStock());
+            
+            // Lưu lại thay đổi (chỉ cập nhật, không xóa)
+            Dish savedDish = dishRepository.save(dish);
+            
+            // LOG: Xác nhận dish đã được lưu thành công
+            if (savedDish == null) {
+                log.error("ERROR: dishRepository.save() returned null for dish ID: {}", dish.getId());
+            } else {
+                log.debug("Dish saved successfully (Admin) - ID: {}, Stock: {}", savedDish.getId(), savedDish.getStock());
+            }
 
             total += dish.getPrice() * item.getQuantity();
         }
@@ -444,8 +528,8 @@ public class OrderService {
         }
         orderRepository.deleteById(String.valueOf(id));
         
-        // Remove from cache
-        cacheService.deleteCachedOrder(id);
+        // Không xóa cache vì Redis là DB chính, không phải cache
+        // cacheService.deleteCachedOrder(id);
         // Invalidate list cache
         cacheService.deleteAllOrderListCache();
     }

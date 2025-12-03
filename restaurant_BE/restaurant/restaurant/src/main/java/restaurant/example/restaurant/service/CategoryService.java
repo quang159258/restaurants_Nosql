@@ -40,8 +40,8 @@ public class CategoryService {
 
     public void handleDeleteCategory(String id) {
         this.categoryRepository.deleteById(id);
-        // Remove from cache
-        cacheService.deleteCachedCategory(Long.parseLong(id));
+        // Không xóa cache vì Redis là DB chính, không phải cache
+        // cacheService.deleteCachedCategory(Long.parseLong(id));
         // Invalidate list cache
         cacheService.deleteAllCategoryListCache();
     }

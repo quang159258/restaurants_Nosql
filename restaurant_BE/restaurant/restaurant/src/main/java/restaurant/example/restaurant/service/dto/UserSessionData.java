@@ -13,7 +13,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserSessionData implements Serializable {
-    private Long userId;
+    private String userId;
     private Instant createdAt;
     private Instant lastAccessAt;
     private String userAgent;

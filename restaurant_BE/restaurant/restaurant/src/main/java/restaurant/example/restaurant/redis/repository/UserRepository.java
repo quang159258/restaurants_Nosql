@@ -34,7 +34,6 @@ public class UserRepository extends BaseRedisRepository {
         String key = USER_PREFIX + user.getId();
         redisTemplate.opsForValue().set(key, user);
         
-        // Update indexes
         if (user.getEmail() != null) {
             redisTemplate.opsForValue().set(
                 USER_INDEX_EMAIL + user.getEmail(), 
@@ -42,7 +41,6 @@ public class UserRepository extends BaseRedisRepository {
             );
         }
         
-        // Add to list
         redisTemplate.opsForSet().add(USER_LIST, user.getId());
         
         return user;
@@ -122,13 +120,10 @@ public class UserRepository extends BaseRedisRepository {
     public void deleteById(String id) {
         User user = findById(id).orElse(null);
         if (user != null) {
-            // Delete indexes
             if (user.getEmail() != null) {
                 redisTemplate.delete(USER_INDEX_EMAIL + user.getEmail());
             }
-            // Delete from list
             redisTemplate.opsForSet().remove(USER_LIST, id);
-            // Delete entity
             redisTemplate.delete(USER_PREFIX + id);
         }
     }

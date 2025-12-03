@@ -58,14 +58,14 @@ public class SecurityUtil {
         userClaims.put("email", user.getEmail());
         userClaims.put("name", user.getName());
         if (user.getRole() != null) {
-            userClaims.put("role", user.getRole().getName()); // hoặc .toString()
+            userClaims.put("role", user.getRole());
         }
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuedAt(now)
                 .expiresAt(validity)
                 .subject(email)
-                .claim("user", userClaims) // dùng map thay vì object
+                .claim("user", userClaims)
                 .build();
 
         JwsHeader jwsHeader = JwsHeader.with(JWT_ALGORITHM).build();
@@ -83,25 +83,20 @@ public class SecurityUtil {
         userClaims.put("email", user.getEmail());
         userClaims.put("name", user.getName());
         if (user.getRole() != null) {
-            userClaims.put("role", user.getRole().getName());
+            userClaims.put("role", user.getRole());
         }
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuedAt(now)
                 .expiresAt(validity)
                 .subject(email)
-                .claim("user", userClaims) // dùng Map thay vì object
+                .claim("user", userClaims)
                 .build();
 
         JwsHeader jwsHeader = JwsHeader.with(JWT_ALGORITHM).build();
         return this.jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, claims)).getTokenValue();
     }
 
-    /**
-     * Get the login of the current user.
-     *
-     * @return the login of the current user.
-     */
     public static Optional<String> getCurrentUserLogin() {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         return Optional.ofNullable(extractPrincipal(securityContext.getAuthentication()));
@@ -120,11 +115,6 @@ public class SecurityUtil {
         return null;
     }
 
-    /**
-     * Get the JWT of the current user.
-     *
-     * @return the JWT of the current user.
-     */
     public static Optional<String> getCurrentUserJWT() {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         return Optional.ofNullable(securityContext.getAuthentication())
@@ -146,5 +136,14 @@ public class SecurityUtil {
             System.out.println(">>> Refresh token error: " + e.getMessage());
             throw e;
         }
+    }
+    
+    public static String getAuthenticatedEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() 
+                || "anonymousUser".equals(authentication.getName())) {
+            throw new RuntimeException("Unauthorized: Please login to continue");
+        }
+        return authentication.getName();
     }
 }

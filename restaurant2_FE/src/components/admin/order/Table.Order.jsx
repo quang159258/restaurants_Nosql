@@ -97,7 +97,7 @@ const OrderTable = () => {
     const loadReferenceData = async () => {
         try {
             const [dishRes, userRes] = await Promise.all([
-                fetchAllDish(1, 500, 1),
+                fetchAllDish(1, 500, null), // Không filter theo category
                 fetchAllUser(1, 100)
             ]);
 

@@ -96,6 +96,9 @@ const PaymentPage = () => {
                 'CASH'
             );
 
+            // Backend trả về RestResponse<T> được unwrap bởi axios interceptor
+            // Sau unwrap: response = { status, message, data: CheckoutResponse, statusCode }
+            // Vậy cần lấy response.data để có CheckoutResponse
             const orderData = response?.data ?? response;
 
             if (orderData?.orderId) {
@@ -107,6 +110,7 @@ const PaymentPage = () => {
 
                 try {
                     const summaryRes = await getCart();
+                    // Cart response cũng được wrap tương tự
                     const summaryData = summaryRes?.data ?? summaryRes;
                     if (summaryData) {
                         setCart(summaryData);

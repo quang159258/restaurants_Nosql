@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import restaurant.example.restaurant.repository.DishRepository;
+import restaurant.example.restaurant.redis.repository.DishRepository;
 
 @Component
 public class DishMetricsScheduler {

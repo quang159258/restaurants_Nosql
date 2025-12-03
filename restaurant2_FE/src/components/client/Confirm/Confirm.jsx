@@ -1,9 +1,9 @@
 import { useContext, useEffect, useState } from "react";
 import { Radio } from "antd";
 import bg3 from "../../../assets/img/bg_3.jpg.webp";
-import food1 from "../../../assets/img/food-1.webp";
+import foodPlaceholder from "../../../assets/img/food-1.webp";
 import { AuthContext } from "../../context/auth.context";
-import { getAllDishInCart, getCart, getVnpayConfig, checkOutCart } from "../../../services/api.service";
+import { getAllDishInCart, getCart, getVnpayConfig, checkOutCart, getImageUrlFromFileName } from "../../../services/api.service";
 import Notification from "../../noti/Notification";
 import { useNavigate } from "react-router-dom";
 import AddressSelector from "../../common/AddressSelector";
@@ -118,8 +118,12 @@ const ConfirmPage = () => {
                     paymentMethod
                 );
                 
-                if (response.status === 200) {
-                    const orderData = response.data;
+                // Backend trả về RestResponse<T> được unwrap bởi axios interceptor
+                // Sau unwrap: response = { status, message, data: CheckoutResponse, statusCode }
+                // Vậy cần lấy response.data để có CheckoutResponse
+                const orderData = response?.data || response;
+                
+                if (orderData?.orderId) {
                     // Refresh cart sau khi checkout thành công
                     await fetchCart();
                     addNotification(
@@ -127,9 +131,12 @@ const ConfirmPage = () => {
                         "Đơn hàng của bạn đã được tạo. Vui lòng chờ xác nhận từ nhân viên.", 
                         "success"
                     );
+                    // Redirect về /order ngay sau khi đặt hàng thành công
                     setTimeout(() => {
                         navigate("/order", { state: { orderId: orderData.orderId } });
-                    }, 2000);
+                    }, 1500);
+                } else {
+                    throw new Error("Không nhận được orderId từ server");
                 }
             } catch (error) {
                 console.error("Error creating order:", error);
@@ -219,14 +226,20 @@ const ConfirmPage = () => {
                     <div>
                         <h2 className="text-xl mb-4">Danh sách đặt hàng</h2>
                         <ul className="max-h-72 overflow-y-auto p-0">
-                            {listItemCart.map((item) => (
+                            {listItemCart.map((item) => {
+                                // Lấy ảnh từ dish, fallback về placeholder nếu không có
+                                const imageUrl = getImageUrlFromFileName(item.imageUrl || item.dishImage) || foodPlaceholder;
+                                return (
                                 <li className="mb-4" key={item.id}>
                                     <div className="flex justify-between items-start">
                                         {/* Hình ảnh món ăn */}
                                         <img
-                                            src={`${food1}`}
-                                            alt="food"
-                                            className="w-20 h-15 rounded"
+                                            src={imageUrl}
+                                            alt={item.name || "food"}
+                                            className="w-20 h-15 rounded object-cover"
+                                            onError={(e) => {
+                                                e.currentTarget.src = foodPlaceholder;
+                                            }}
                                         />
 
                                         {/* Nội dung món ăn */}
@@ -255,7 +268,8 @@ const ConfirmPage = () => {
                                         </button>
                                     </div>
                                 </li>
-                            ))}
+                                );
+                            })}
                         </ul>
                     </div>
 

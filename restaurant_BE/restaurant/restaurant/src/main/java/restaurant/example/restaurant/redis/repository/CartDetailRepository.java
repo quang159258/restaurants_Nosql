@@ -30,7 +30,6 @@ public class CartDetailRepository extends BaseRedisRepository {
         String key = CART_DETAIL_PREFIX + cartDetail.getId();
         redisTemplate.opsForValue().set(key, cartDetail);
         
-        // Update cart index
         if (cartDetail.getCartId() != null) {
             redisTemplate.opsForSet().add(
                 CART_DETAIL_INDEX_CART + cartDetail.getCartId(),
@@ -42,7 +41,6 @@ public class CartDetailRepository extends BaseRedisRepository {
             );
         }
         
-        // Add to list
         redisTemplate.opsForSet().add(CART_DETAIL_LIST, cartDetail.getId());
         
         return cartDetail;
@@ -85,7 +83,6 @@ public class CartDetailRepository extends BaseRedisRepository {
     public void deleteById(String id) {
         CartDetail detail = findById(id).orElse(null);
         if (detail != null) {
-            // Remove from cart index
             if (detail.getCartId() != null) {
                 redisTemplate.opsForSet().remove(
                     CART_DETAIL_INDEX_CART + detail.getCartId(),
@@ -96,9 +93,7 @@ public class CartDetailRepository extends BaseRedisRepository {
                     id
                 );
             }
-            // Remove from list
             redisTemplate.opsForSet().remove(CART_DETAIL_LIST, id);
-            // Delete entity
             redisTemplate.delete(CART_DETAIL_PREFIX + id);
         }
     }

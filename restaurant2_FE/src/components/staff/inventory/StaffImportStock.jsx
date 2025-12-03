@@ -135,15 +135,30 @@ const StaffImportStock = () => {
     const fetchDishes = async () => {
         setLoading(true);
         try {
-            const res = await fetchAllDish(1, 100, 1);
+            // Không filter theo category, lấy tất cả dishes
+            const res = await fetchAllDish(1, 100, null);
+            console.log("Staff Inventory - API Response:", res);
+            
             const data = res?.data ?? res;
-            if (data?.result) {
+            console.log("Staff Inventory - Parsed data:", data);
+            
+            if (data?.result && Array.isArray(data.result)) {
                 setDishes(data.result);
             } else if (Array.isArray(data)) {
                 setDishes(data);
+            } else {
+                console.warn("Staff Inventory - Unexpected data structure:", data);
+                setDishes([]);
+                message.warning('Không thể lấy dữ liệu món ăn. Vui lòng kiểm tra lại.');
             }
         } catch (error) {
-            message.error('Lỗi khi tải danh sách món ăn');
+            console.error("Staff Inventory - Error details:", error.response?.data || error.message);
+            setDishes([]);
+            message.error(
+                error.response?.data?.message || 
+                error.message || 
+                'Lỗi khi tải danh sách món ăn'
+            );
         } finally {
             setLoading(false);
         }

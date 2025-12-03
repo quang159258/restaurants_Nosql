@@ -74,8 +74,10 @@ const SimplePayment = () => {
                 formData.paymentMethod
             );
 
-            // Axios interceptor có thể unwrap response, nên cần check nhiều level
-            const orderData = response?.data?.data || response?.data || response;
+            // Backend trả về RestResponse<T> được unwrap bởi axios interceptor
+            // Sau unwrap: response = { status, message, data: CheckoutResponse, statusCode }
+            // Vậy cần lấy response.data để có CheckoutResponse
+            const orderData = response?.data || response;
             
             console.log("Checkout response:", response);
             console.log("Order data:", orderData);
@@ -86,7 +88,8 @@ const SimplePayment = () => {
             // Refresh cart sau khi checkout thành công (backend đã xóa cart)
             try {
                 const cartRes = await getCart();
-                const cartData = cartRes?.data?.data || cartRes?.data || cartRes;
+                // Cart response cũng được wrap tương tự
+                const cartData = cartRes?.data || cartRes;
                 if (cartData) {
                     setCart(cartData);
                 }

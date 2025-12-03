@@ -26,7 +26,6 @@ public abstract class BaseRedisRepository {
             try {
                 return objectMapper.convertValue(value, clazz);
             } catch (Exception e) {
-                // Fallback: manual conversion for common fields
                 return convertMapToModel((Map<String, Object>) value, clazz);
             }
         }
@@ -38,7 +37,6 @@ public abstract class BaseRedisRepository {
         try {
             T instance = clazz.getDeclaredConstructor().newInstance();
             
-            // Use reflection to set fields
             java.lang.reflect.Field[] fields = clazz.getDeclaredFields();
             for (java.lang.reflect.Field field : fields) {
                 field.setAccessible(true);

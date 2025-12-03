@@ -154,12 +154,20 @@ const ImportStock = () => {
     const fetchDishes = async () => {
         setLoading(true);
         try {
-            const res = await fetchAllDish(1, 100, 1);
-            if (res.data && res.data.result) {
-                setDishes(res.data.result);
+            // Không filter theo category, lấy tất cả dishes
+            const res = await fetchAllDish(1, 100, null);
+            const data = res?.data ?? res;
+            if (data?.result && Array.isArray(data.result)) {
+                setDishes(data.result);
+            } else if (Array.isArray(data)) {
+                setDishes(data);
+            } else {
+                setDishes([]);
             }
         } catch (error) {
-            message.error('Lỗi khi tải danh sách món ăn');
+            console.error('Lỗi khi tải danh sách món ăn:', error);
+            message.error(error.response?.data?.message || 'Lỗi khi tải danh sách món ăn');
+            setDishes([]);
         } finally {
             setLoading(false);
         }
